@@ -18,7 +18,7 @@ from typing import Any, Callable
 import pandas as pd
 import yaml
 
-from .bedrock import ModelRequest, ModelResponse, VisionModel
+from .bedrock import LAYOUTS, ModelRequest, ModelResponse, VisionModel
 from .cost import BudgetExceeded, BudgetGuard, PricingTable, call_cost
 from .data import EncodedImage, load_image
 from .parse import ParseSpec, parse_response
@@ -40,6 +40,8 @@ class RunConfig:
     prompt_vars: dict[str, dict[str, str]] = field(default_factory=dict)  # 品目ごとの差し替え {{key}}
     service_tier: str = "standard"
     image_long_edge: int | None = None
+    layout: str = "refs_first"  # 画像と文の並べ方（bedrock.LAYOUTS）
+    ref_note: str | None = None  # layout=target_first のとき、見本の前に置く文
     inference: dict[str, Any] = field(default_factory=lambda: {"temperature": 0, "maxTokens": 300})
     additional_fields: dict[str, Any] | None = None
     repeats: int = 1
@@ -56,6 +58,13 @@ class RunConfig:
             raise ValueError("n_refs > 0 requires refs")
         if cfg.repeats < 1:
             raise ValueError("repeats must be >= 1")
+        if cfg.layout not in LAYOUTS:
+            raise ValueError(f"layout must be one of {LAYOUTS}")
+        if cfg.ref_note and cfg.layout != "target_first":
+            raise ValueError("ref_note is only used with layout 'target_first'")
+        unknown_inf = set(cfg.inference) - {"temperature", "maxTokens", "topP"}
+        if unknown_inf:
+            raise ValueError(f"unknown inference keys: {sorted(unknown_inf)} (topK などは additional_fields に書く)")
         return cfg
 
     @property
@@ -171,6 +180,9 @@ def execute(
                     system=fill_template(system_text, vars_) if system_text else None,
                     temperature=cfg.inference.get("temperature", 0),
                     max_tokens=cfg.inference.get("maxTokens", 300),
+                    top_p=cfg.inference.get("topP"),
+                    layout=cfg.layout,
+                    ref_note=cfg.ref_note,
                     service_tier=cfg.service_tier,
                     additional_fields=cfg.additional_fields,
                 )
@@ -212,6 +224,9 @@ def call_identity(cfg: RunConfig, prompt_text: str, system_text: str | None) -> 
         "image_long_edge": cfg.image_long_edge,
         "temperature": cfg.inference.get("temperature", 0),
         "max_tokens": cfg.inference.get("maxTokens", 300),
+        "top_p": cfg.inference.get("topP"),
+        "layout": cfg.layout,
+        "ref_note": cfg.ref_note,
         "additional_fields": cfg.additional_fields,
     }
 

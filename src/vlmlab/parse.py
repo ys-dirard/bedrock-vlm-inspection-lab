@@ -17,9 +17,14 @@ _FENCE_OPEN = "```"
 class ParseSpec:
     """応答の形。設定ファイルの `parse:` から作る。
 
-    AWS サンプルの形（`qc` が OK/NOK）なら judgement_key="qc", ng_values=("NOK",) とする。
+    - mode="key": 最上位の judgement_key の値で判定する（既定）
+    - mode="objects": AWS サンプル（sample-generative-visual-inspection）の形。
+      最上位の objects_key（既定 "objects"）が欠陥の配列で、各要素の judgement_key（"qc"）が OK/NOK。
+      空の配列なら OK、NOK が1つでもあれば NG、すべて OK なら OK（CI-P6）
     """
 
+    mode: str = "key"
+    objects_key: str = "objects"
     judgement_key: str = "judgement"
     ok_values: tuple[str, ...] = ("OK",)
     ng_values: tuple[str, ...] = ("NG",)
@@ -93,6 +98,10 @@ def parse_response(raw_text: str | None, spec: ParseSpec | None = None) -> Parse
     obj, err = parse_object(raw_text, spec.allow_code_fence)
     if obj is None:
         return _fail(err or "unknown")
+    if spec.mode == "objects":
+        return _parse_objects(obj, spec)
+    if spec.mode != "key":
+        return _fail(f"spec: unknown mode {spec.mode!r}", obj)
 
     if spec.judgement_key not in obj:
         return _fail(f"schema: missing key '{spec.judgement_key}'", obj)
@@ -117,3 +126,32 @@ def parse_response(raw_text: str | None, spec: ParseSpec | None = None) -> Parse
         defect = d if isinstance(d, str) else json.dumps(d, ensure_ascii=False)
 
     return ParseResult(parsed=obj, pred=pred, confidence=confidence, defect=defect, parse_error=None)
+
+
+def _parse_objects(obj: dict[str, Any], spec: ParseSpec) -> ParseResult:
+    """AWS サンプルの形を読む（CI-P6）。確信度は無いので confidence=None。"""
+    if spec.objects_key not in obj:
+        return _fail(f"schema: missing key '{spec.objects_key}'", obj)
+    items = obj[spec.objects_key]
+    if not isinstance(items, list):
+        return _fail(f"schema: '{spec.objects_key}' must be a list, got {type(items).__name__}", obj)
+    preds: list[str] = []
+    reasons: list[str] = []
+    for i, it in enumerate(items):
+        if not isinstance(it, dict):
+            return _fail(f"schema: {spec.objects_key}[{i}] is {type(it).__name__}, not object", obj)
+        if spec.judgement_key not in it:
+            return _fail(f"schema: {spec.objects_key}[{i}] missing key '{spec.judgement_key}'", obj)
+        v = it[spec.judgement_key]
+        if isinstance(v, str) and v in spec.ok_values:
+            preds.append("OK")
+        elif isinstance(v, str) and v in spec.ng_values:
+            preds.append("NG")
+            if spec.defect_key and spec.defect_key in it:
+                r = it[spec.defect_key]
+                reasons.append(r if isinstance(r, str) else json.dumps(r, ensure_ascii=False))
+        else:
+            return _fail(f"schema: {spec.objects_key}[{i}].{spec.judgement_key} has unexpected value {v!r}", obj)
+    pred = "NG" if "NG" in preds else "OK"
+    defect = "; ".join(reasons) if reasons else None
+    return ParseResult(parsed=obj, pred=pred, confidence=None, defect=defect, parse_error=None)

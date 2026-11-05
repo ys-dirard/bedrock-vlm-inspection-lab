@@ -1,0 +1,30 @@
+Provide me the JSON with the written description in 'text' and the list of objects in 'objects'.
+This list must include: name, color, qc, reason, bounding_box of the defect (x_min, y_min, x_max, y_max).
+Clean JSON only — no markdown, no extra characters.
+If you describe a defect, include its bounding box.
+Do not group bounding boxes or include any from the reference image. Be strict on the JSON based on the example,
+keep the same names for the objects because I am parsing those later. Make bounding boxes for all defects.
+Example JSON:
+{
+    "text": "The object is a blue and green sponge. The green part has white spots...",
+    "objects": [
+        {
+            "name": "defect_1",
+            "color": "green",
+            "qc": "NOK",
+            "reason": "white spots",
+            "bounding_box": {
+                "x_min": 195, "y_min": 475, "x_max": 285, "y_max": 595
+            }
+        },
+        {
+            "name": "defect_2",
+            "color": "blue",
+            "qc": "NOK",
+            "reason": "white spot and small hole",
+            "bounding_box": {
+                "x_min": 690, "y_min": 420, "x_max": 760, "y_max": 500
+            }
+        }
+    ]
+}

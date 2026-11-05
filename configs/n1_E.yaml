@@ -1,0 +1,12 @@
+# 11/11 の記事：条件 E（Nova Multimodal Embeddings ＋ k近傍法）。plan.md 末尾の案の手順4
+# 学習用：data/splits/visa_knn_train.csv（各品目 良品100枚 = train、不良品20枚 = test のうち評価に使わないもの）
+name: n1_E
+train_split: data/splits/visa_knn_train.csv
+test_split: data/splits/visa_test_200.csv
+model_id: amazon.nova-2-multimodal-embeddings-v1:0
+region: us-east-1                   # モデルカードの表は us-east-1 のみ（画像は米国のリージョンへ送られる）
+embedding_purpose: GENERIC_INDEX    # 案のとおり。分類向けの CLASSIFICATION もある
+embedding_dimension: 1024
+k: 3
+image_long_edge: null               # 原寸
+budget_usd: 0.5

@@ -1,0 +1,16 @@
+# 11/11 の記事：広域チェック（12品目 × 良品5枚・不良品5枚）。plan.md の「この記事での変更点」3
+# 条件は A〜C のうち 200枚で F1 が一番高かった C（F1 0.095。results/summary_200.md）
+name: n1_wide
+split: data/splits/visa_wide_120.csv
+refs: data/splits/visa_refs.csv
+n_refs: 3
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v1_judge.txt
+image_long_edge: null
+inference: {temperature: 0, maxTokens: 300}
+repeats: 1
+budget_usd: 0.3
+parse:
+  allow_code_fence: true

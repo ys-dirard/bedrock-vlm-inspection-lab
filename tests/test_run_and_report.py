@@ -229,3 +229,43 @@ def test_converse_kwargs_order_and_tier():
                                 "usage": {"inputTokens": 5, "outputTokens": 2}, "stopReason": "end_turn",
                                 "serviceTier": {"type": "default"}}, 0.5, 1)
     assert (r.raw_text, r.input_tokens, r.output_tokens, r.service_tier_resolved) == ("{}", 5, 2, "default")
+
+
+def test_converse_kwargs_target_first_layout_and_top_p():
+    """AWS サンプルの並び：検査対象 → 指示 → ref_note → 見本（1通の user メッセージ）"""
+    ref, target = EncodedImage(b"r", "jpeg", 1, 1), EncodedImage(b"t", "jpeg", 1, 1)
+    req = ModelRequest(model_id="m", images=[ref, target], text="inst", layout="target_first",
+                       ref_note="This is the reference image.", top_p=0.1, temperature=0.1, max_tokens=2500)
+    k = build_converse_kwargs(req)
+    assert len(k["messages"]) == 1 and k["messages"][0]["role"] == "user"
+    c = k["messages"][0]["content"]
+    assert c[0]["image"]["source"]["bytes"] == b"t"
+    assert c[1] == {"text": "inst"}
+    assert c[2] == {"text": "This is the reference image."}
+    assert c[3]["image"]["source"]["bytes"] == b"r"
+    assert k["inferenceConfig"] == {"temperature": 0.1, "maxTokens": 2500, "topP": 0.1}
+    # topP を指定しなければ送らない
+    k0 = build_converse_kwargs(ModelRequest(model_id="m", images=[target], text="t"))
+    assert "topP" not in k0["inferenceConfig"]
+
+
+def test_converse_kwargs_rejects_bad_layout():
+    img = EncodedImage(b"x", "jpeg", 1, 1)
+    with pytest.raises(ValueError):
+        build_converse_kwargs(ModelRequest(model_id="m", images=[img], text="t", layout="nope"))
+    with pytest.raises(ValueError):  # ref_note は target_first のときだけ
+        build_converse_kwargs(ModelRequest(model_id="m", images=[img], text="t", ref_note="x"))
+
+
+@pytest.mark.parametrize("extra", [
+    {"layout": "nope"},
+    {"ref_note": "x"},                              # layout が refs_first のまま
+    {"inference": {"temperature": 0, "topK": 20}},  # topK は additional_fields に書く
+])
+def test_config_rejects_invalid_layout_and_inference(tmp_path, extra):
+    import yaml
+    d = {"name": "x", "split": "s.csv", "model_id": "m", "region": "r", "prompt": "p.txt", "budget_usd": 1.0, **extra}
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.safe_dump(d), encoding="utf-8")
+    with pytest.raises(ValueError):
+        RunConfig.load(p)

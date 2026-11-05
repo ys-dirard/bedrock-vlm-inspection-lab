@@ -3,6 +3,7 @@
   vlmlab fetch                         VisA の tar を取得して展開する（認証なし）
   vlmlab splits                        data/splits/ の CSV を作る
   vlmlab run CONFIG [--limit N] [--dry-run]
+  vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
 """
 
@@ -34,6 +35,14 @@ def main(argv: list[str] | None = None) -> None:
     r.add_argument("--visa-root", default="data/visa")
     r.add_argument("--pricing", default="pricing.yaml")
     r.add_argument("--runs-dir", default="runs")
+
+    e = sub.add_parser("embed", help="条件 E：埋め込み＋k近傍法")
+    e.add_argument("config")
+    e.add_argument("--limit", type=int, default=None, help="試運転：テスト画像 N 枚を埋め込むだけ（判定しない）")
+    e.add_argument("--dry-run", action="store_true")
+    e.add_argument("--visa-root", default="data/visa")
+    e.add_argument("--pricing", default="pricing.yaml")
+    e.add_argument("--runs-dir", default="runs")
 
     rp = sub.add_parser("report")
     rp.add_argument("run_dirs", nargs="+")
@@ -68,6 +77,20 @@ def main(argv: list[str] | None = None) -> None:
         from .bedrock import BedrockConverse
         from .run import execute
         execute(plan, BedrockConverse(cfg.region), pricing, ROOT / a.visa_root, ROOT)
+    elif a.cmd == "embed":
+        from .embed_run import EmbedConfig, execute_embed, load_embedding_price, plan_images
+        cfg = EmbedConfig.load(a.config)
+        price = load_embedding_price(ROOT / a.pricing, cfg.model_id)
+        run_name, images, _ = plan_images(cfg, ROOT, a.limit)
+        if a.dry_run:
+            print(json.dumps({
+                "run_name": run_name, "calls": len(images), "per_image_usd": price,
+                "by_role": images.groupby(["role", "category", "label"]).size().to_dict().__repr__(),
+            }, ensure_ascii=False, indent=2))
+            return
+        from .embed import NovaEmbedder
+        embedder = NovaEmbedder(cfg.model_id, cfg.region, cfg.embedding_purpose, cfg.embedding_dimension)
+        execute_embed(cfg, embedder, price, ROOT / a.visa_root, ROOT, ROOT / a.runs_dir, a.limit)
     elif a.cmd == "report":
         from .report import build_report
         for k, v in build_report(a.run_dirs, a.out, a.tag).items():

@@ -1,0 +1,15 @@
+# 11/11 の記事：条件 B（Nova 2 Lite、良品の見本 1 枚）。plan.md の手順3
+name: n1_B
+split: data/splits/visa_test_200.csv
+refs: data/splits/visa_refs.csv
+n_refs: 1
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v1_judge.txt
+image_long_edge: null               # 原寸（Nova 2 Lite は画像1枚230トークンで課金）
+inference: {temperature: 0, maxTokens: 300}
+repeats: 3
+budget_usd: 0.8
+parse:
+  allow_code_fence: true            # 試運転で全件が ```json の囲み付きだった。本文全体を包む囲みだけ外す（2026-11-05 決定）

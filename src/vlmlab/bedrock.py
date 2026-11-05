@@ -16,6 +16,13 @@ from .data import EncodedImage
 # https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html（2026-11-05 確認）
 SERVICE_TIERS = {"standard": "default", "flex": "flex", "priority": "priority"}
 
+# 画像と文の並べ方
+# - refs_first:   [見本…, 検査対象, 指示]（この基盤の既定）
+# - target_first: [検査対象, 指示, ref_note, 見本…]（AWS サンプル sample-generative-visual-inspection の並び。
+#   サンプルは InvokeModel で見本を2通目の user メッセージとして渡すが、この基盤は Converse で
+#   1通の user メッセージを送る作りなので、同じ順のまま1通にまとめる。2通に分けたときの挙動は確かめていない）
+LAYOUTS = ("refs_first", "target_first")
+
 RETRYABLE = {
     "ThrottlingException",
     "ServiceUnavailableException",
@@ -28,11 +35,14 @@ RETRYABLE = {
 @dataclass(frozen=True)
 class ModelRequest:
     model_id: str
-    images: list[EncodedImage]  # 並べた順に渡す（見本 → 検査対象）
-    text: str  # 画像のあとに置く指示
+    images: list[EncodedImage]  # 見本 → 検査対象の順（最後が検査対象）。渡す順は layout で決まる
+    text: str  # 指示
     system: str | None = None
     temperature: float = 0.0
     max_tokens: int = 300
+    top_p: float | None = None
+    layout: str = "refs_first"
+    ref_note: str | None = None  # target_first のとき、見本の前に置く文
     service_tier: str = "standard"
     additional_fields: dict[str, Any] | None = None
 
@@ -56,15 +66,36 @@ class VisionModel(Protocol):
     def invoke(self, request: ModelRequest) -> ModelResponse: ...
 
 
+def _image_block(img: EncodedImage) -> dict[str, Any]:
+    return {"image": {"format": img.format, "source": {"bytes": img.data}}}
+
+
+def build_content(req: ModelRequest) -> list[dict[str, Any]]:
+    if req.layout == "refs_first":
+        if req.ref_note:
+            raise ValueError("ref_note is only used with layout 'target_first'")
+        return [_image_block(i) for i in req.images] + [{"text": req.text}]
+    if req.layout == "target_first":
+        if not req.images:
+            raise ValueError("layout 'target_first' requires the target image")
+        *refs, target = req.images
+        content: list[dict[str, Any]] = [_image_block(target), {"text": req.text}]
+        if refs:
+            if req.ref_note:
+                content.append({"text": req.ref_note})
+            content.extend(_image_block(i) for i in refs)
+        return content
+    raise ValueError(f"unknown layout {req.layout!r}; expected one of {LAYOUTS}")
+
+
 def build_converse_kwargs(req: ModelRequest) -> dict[str, Any]:
-    content: list[dict[str, Any]] = [
-        {"image": {"format": img.format, "source": {"bytes": img.data}}} for img in req.images
-    ]
-    content.append({"text": req.text})
+    inference: dict[str, Any] = {"temperature": req.temperature, "maxTokens": req.max_tokens}
+    if req.top_p is not None:
+        inference["topP"] = req.top_p
     kwargs: dict[str, Any] = {
         "modelId": req.model_id,
-        "messages": [{"role": "user", "content": content}],
-        "inferenceConfig": {"temperature": req.temperature, "maxTokens": req.max_tokens},
+        "messages": [{"role": "user", "content": build_content(req)}],
+        "inferenceConfig": inference,
     }
     if req.system:
         kwargs["system"] = [{"text": req.system}]

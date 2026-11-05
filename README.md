@@ -70,7 +70,9 @@ parse:                              # 省略すると {"judgement": "OK"/"NG", "
   allow_code_fence: false           # true にすると ```json の囲みだけは外す
 ```
 
-- 画像は「見本 → 検査対象 → 指示の文」の順に1つのメッセージで渡します
+- 画像は「見本 → 検査対象 → 指示の文」の順に1つのメッセージで渡します。`layout: target_first` にすると「検査対象 → 指示 → `ref_note` の文 → 見本」の順になります（AWS サンプルの再現用）
+- `inference` に書けるのは `temperature`・`maxTokens`・`topP` です。`topK` などは `additional_fields` に書きます
+- AWS サンプルの応答（`objects` の各要素の `qc` が OK/NOK）は、`parse: {mode: objects, judgement_key: qc, ng_values: [NOK], confidence_key: null, defect_key: reason}` で読みます。空の配列なら OK、NOK が1つでもあれば NG です
 - 品目ごとにプロンプトの一部を差し替えるときは、プロンプトに `{{item}}` のように書き、`prompt_vars: {pcb1: {item: "..."}, capsules: {item: "..."}}` を設定します
 - 推論の設定などは `additional_fields` に書くと `additionalModelRequestFields` として渡します
 
@@ -85,6 +87,18 @@ uv run vlmlab run configs/n1_B.yaml                # 本番（runs/n1_B/）。�
 - `pricing.yaml` で入力か出力の単価が null のモデルは、実行を断ります
 - 次の呼び出しの前に「累計 + これまでで最も高かった1呼び出しの費用」が `budget_usd` を超えるなら止めます
 - スロットリングなどは、指数バックオフで最大6回まで試します。それでも失敗した呼び出しは `api_error` を付けて記録し、次の実行で呼び直します
+
+### 埋め込み＋k近傍法（条件 E）
+
+```bash
+uv run vlmlab embed configs/n1_E.yaml --dry-run     # 呼ばずに件数と単価を確認
+uv run vlmlab embed configs/n1_E.yaml --limit 10    # 試運転：テスト画像10枚を埋め込むだけ
+uv run vlmlab embed configs/n1_E.yaml               # 学習用240枚とテスト200枚を埋め込み、品目ごとに k近傍法で判定
+```
+
+- 埋め込みは `runs/<name>/embeddings.jsonl` に残すので、k を変えても呼び直しません
+- 判定は `calls.jsonl`（ほかの条件と同じ形）に書くので、`vlmlab report` でそのまま集計できます。費用はテスト画像1枚の埋め込みの値で、学習用画像の費用は `summary.json` の `index_cost_usd` に分けて書きます
+- 費用は画像1枚あたりの単価（`pricing.yaml` の `per_image_usd`）で数えます。応答ヘッダーの入力トークン数は、画像では 0 になるので費用には使いません
 
 ### 3. 集計
 

@@ -1,0 +1,6 @@
+Compare the current image with the reference image 
+and highlight any visual differences. Mark as NOK if differences exist; otherwise, mark as OK. 
+Be very strict with the differences, give me all the differences. Check for any missing or visual differences.
+Scratches and dents are also important. Search for any aestethical problem, any barcode missing, if the objects have some 
+missing labels, or anything aestethically different, blurry text or logos. Any material differences, scratches on surface,
+color difference between reference and QC objects

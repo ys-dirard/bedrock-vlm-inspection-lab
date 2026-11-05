@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from vlmlab.parse import ParseSpec, parse_object, parse_response
@@ -88,3 +90,59 @@ def test_spec_from_dict_converts_lists():
     spec = ParseSpec.from_dict({"judgement_key": "qc", "ng_values": ["NOK"]})
     assert spec.ng_values == ("NOK",)
     assert parse_object('{"a": 1}') == ({"a": 1}, None)
+
+
+# ---- AWS サンプルの形（mode="objects"）----
+
+SAMPLE_SPEC = ParseSpec(mode="objects", judgement_key="qc", ok_values=("OK",), ng_values=("NOK",),
+                        confidence_key=None, defect_key="reason", allow_code_fence=True)
+
+
+def _sample(objects):
+    return json.dumps({"text": "desc", "objects": objects})
+
+
+@pytest.mark.parametrize("objects, pred", [
+    ([], "OK"),                                                     # 欠陥なし
+    ([{"name": "d1", "qc": "OK", "reason": ""}], "OK"),             # すべて OK
+    ([{"name": "d1", "qc": "NOK", "reason": "scratch"}], "NG"),
+    ([{"name": "d1", "qc": "OK"}, {"name": "d2", "qc": "NOK", "reason": "hole"}], "NG"),  # 1つでも NOK なら NG
+])
+def test_objects_mode_judgement(objects, pred):
+    """CI-P6"""
+    r = parse_response(_sample(objects), SAMPLE_SPEC)
+    assert r.ok and r.pred == pred and r.confidence is None
+
+
+def test_objects_mode_collects_reasons_of_nok():
+    """CI-P6：defect は NOK の reason を '; ' でつなぐ"""
+    r = parse_response(_sample([{"qc": "NOK", "reason": "a"}, {"qc": "OK", "reason": "x"},
+                                {"qc": "NOK", "reason": "b"}]), SAMPLE_SPEC)
+    assert r.defect == "a; b"
+
+
+@pytest.mark.parametrize("payload", [
+    {"text": "no objects key"},
+    {"objects": {"qc": "NOK"}},                    # 配列でない
+    {"objects": ["NOK"]},                          # 要素がオブジェクトでない
+    {"objects": [{"name": "d1"}]},                 # qc が無い
+    {"objects": [{"qc": "nok"}]},                  # 大文字・小文字も区別
+    {"objects": [{"qc": "NG"}]},                   # サンプルの値ではない
+])
+def test_objects_mode_schema_failures(payload):
+    """CI-P6, CI-P2：形が違えば失敗。読めた JSON は parsed に残す"""
+    r = parse_response(json.dumps(payload), SAMPLE_SPEC)
+    assert not r.ok and r.pred is None and r.parse_error.startswith("schema:")
+    assert r.parsed == payload
+
+
+def test_objects_mode_still_requires_whole_object():
+    """CI-P1, CI-P3：objects でも救済はしない（囲みは allow_code_fence のときだけ外す）"""
+    fenced = "```json\n" + _sample([]) + "\n```"
+    assert parse_response(fenced, SAMPLE_SPEC).pred == "OK"
+    assert not parse_response("Here is the JSON: " + _sample([]), SAMPLE_SPEC).ok
+
+
+def test_unknown_mode_fails():
+    r = parse_response('{"judgement": "OK"}', ParseSpec(mode="foo"))
+    assert not r.ok and r.parse_error.startswith("spec:")

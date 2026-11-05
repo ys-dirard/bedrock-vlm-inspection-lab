@@ -1,0 +1,29 @@
+# 11/11 の記事：条件 D（AWS サンプル sample-generative-visual-inspection の再現）。plan.md の「この記事での変更点」2
+# 出典: https://github.com/aws-samples/sample-generative-visual-inspection
+#       Nova_Pro_Visual_Inspection.ipynb（commit 3c76f0c6157ee88143740918ef0878f4f7e67cbf、MIT-0）
+# サンプルとの違いは記事フォルダの results/deviations.md に書く
+name: n1_D
+split: data/splits/visa_test_200.csv
+refs: data/splits/visa_refs.csv
+n_refs: 1                           # 条件 B と同じ見本（ref_rank=1）
+model_id: apac.amazon.nova-pro-v1:0 # サンプルは us-east-1 の amazon.nova-pro-v1:0
+region: ap-northeast-1
+service_tier: standard
+system_prompt: prompts/aws_sample_system.txt
+prompt: prompts/aws_sample_instruction.txt
+layout: target_first                # サンプルの並び：検査対象 → 指示 →（2通目）参照の説明 → 参照画像
+ref_note: "This is the reference image. Do not include bounding boxes for this image."
+image_long_edge: 1024               # サンプルは thumbnail((1024, 1024))。ここでは JPEG で符号化し直す（サンプルは PNG）
+inference: {temperature: 0.1, maxTokens: 2500, topP: 0.1}
+additional_fields: {inferenceConfig: {topK: 20}}
+repeats: 1
+budget_usd: 1.5
+parse:
+  mode: objects
+  objects_key: objects
+  judgement_key: qc
+  ok_values: [OK]
+  ng_values: [NOK]
+  confidence_key: null              # サンプルの形には確信度が無い（業務指標は出せない）
+  defect_key: reason
+  allow_code_fence: true            # サンプルも ```json の囲みを外している

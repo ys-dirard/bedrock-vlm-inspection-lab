@@ -110,6 +110,26 @@ def make_wide_split(table: pd.DataFrame, n_per_label: int = 5, categories=CATEGO
     return make_test_split(table, categories=categories, n_per_label=n_per_label)
 
 
+def make_knn_train(table: pd.DataFrame, exclude_ids: set[str], n_normal: int = 100, n_anomaly: int = 20,
+                   categories=("pcb1", "capsules")) -> pd.DataFrame:
+    """埋め込み＋k近傍法（条件 E）の学習用：各品目の良品 n_normal 枚と不良品 n_anomaly 枚（random_state=42）。
+
+    VisA の 1cls.csv では train に不良品が無い（不良品は test だけ）。そこで、良品は train から、
+    不良品は test のうち exclude_ids（評価に使う画像）に入っていないものから選ぶ。
+    """
+    rows = []
+    for cat in categories:
+        t = table[table.category == cat]
+        normal = t[(t.split == "train") & (t.label == "normal") & ~t.image_id.isin(exclude_ids)]
+        anomaly = t[(t.split == "test") & (t.label == "anomaly") & ~t.image_id.isin(exclude_ids)]
+        rows.append(_sample(normal, n_normal))
+        rows.append(_sample(anomaly, n_anomaly))
+    out = pd.concat(rows, ignore_index=True)[SPLIT_COLUMNS]
+    if set(out.image_id) & exclude_ids:
+        raise ValueError("knn train overlaps with excluded images")
+    return out
+
+
 def write_splits(visa_root: str | Path, out_dir: str | Path) -> dict[str, Path]:
     table = load_split_table(visa_root)
     out = Path(out_dir)
@@ -119,14 +139,17 @@ def write_splits(visa_root: str | Path, out_dir: str | Path) -> dict[str, Path]:
     wide = make_wide_split(table)
     if set(refs.image_id) & (set(test.image_id) | set(wide.image_id)):
         raise ValueError("refs overlap with test images")
+    knn = make_knn_train(table, set(test.image_id) | set(wide.image_id))
     paths = {
         "visa_test_200": out / "visa_test_200.csv",
         "visa_refs": out / "visa_refs.csv",
         "visa_wide_120": out / "visa_wide_120.csv",
+        "visa_knn_train": out / "visa_knn_train.csv",
     }
     test.to_csv(paths["visa_test_200"], index=False, lineterminator="\n")
     refs.to_csv(paths["visa_refs"], index=False, lineterminator="\n")
     wide.to_csv(paths["visa_wide_120"], index=False, lineterminator="\n")
+    knn.to_csv(paths["visa_knn_train"], index=False, lineterminator="\n")
     return paths
 
 

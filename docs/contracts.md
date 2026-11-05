@@ -19,6 +19,7 @@
 | CI-P3 | post | 正規表現で JSON を探し出す救済はしない。` ```json ` の囲みを外すのは `allow_code_fence=True` を明示したときだけ（既定は False） |
 | CI-P4 | post | 判定のキー（既定 `judgement`）の値が `ok_values` / `ng_values` のどちらかに完全一致すれば OK / NG に直す。大文字・小文字も区別する。どちらでもなければ失敗（schema） |
 | CI-P5 | post | 確信度のキーがあれば、0 以上 1 以下の数（bool は除く）でなければ失敗（schema）。キーが無いときは confidence=None で成功 |
+| CI-P6 | post | `mode: objects`（AWS サンプルの形）：最上位の `objects` が配列で、各要素がオブジェクトで、各要素の判定のキー（`qc`）の値が `ok_values` / `ng_values` に完全一致しなければ失敗（schema）。空の配列なら OK、NG の値が1つでもあれば NG、すべて OK なら OK。confidence は常に None。defect は NG の要素の `reason` を「; 」でつないだもの。サンプルのノートブックは objects[0] の qc だけを見るが、ここでは全要素を見る |
 
 ## metrics.py（評価指標）
 
@@ -52,10 +53,22 @@
 
 | ID | 種類 | 条件 |
 | --- | --- | --- |
-| CI-R1 | pre | 再開のとき、呼び出しの中身を決める設定（モデル ID、層、プロンプトの版と中身のハッシュ、見本の枚数、縮小、temperature、maxTokens、additional_fields）が前の記録と1つでも違えば、呼ぶ前に止める。読み取りの設定（parse）は後から変えてよい |
+| CI-R1 | pre | 再開のとき、呼び出しの中身を決める設定（モデル ID、層、プロンプトの版と中身のハッシュ、見本の枚数、縮小、temperature、maxTokens、topP、layout、ref_note、additional_fields）が前の記録と1つでも違えば、呼ぶ前に止める。読み取りの設定（parse）は後から変えてよい |
 | CI-R2 | pre | 品目ごとの差し替え（prompt_vars）が足りない品目があれば、最初の呼び出しの前に止める |
 | CI-R3 | post | (image_id, repeat) ごとに、成功した記録は1つだけ使う（複数あれば最後のもの）。API のエラーで終わった記録は指標に入れず、件数を n_api_error に出す |
+| CI-B2 | post | `layout: refs_first` は [見本…, 検査対象, 指示]、`layout: target_first` は [検査対象, 指示, ref_note, 見本…] の順で、1通の user メッセージにする。ref_note は target_first のときだけ使える。topP は設定したときだけ送る |
 | CI-B1 | post | スロットリングなどの再試行できるエラーと、タイムアウト・接続の失敗は、指数バックオフで max_attempts まで試す。それでも失敗したら例外を投げずに api_error を返す。再試行できないエラーはすぐ api_error を返す |
+
+## embed.py・embed_run.py（条件 E：埋め込み＋k近傍法）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-E1 | post | 応答の `embeddings` がちょうど1つで、`embeddingType` が IMAGE、長さが設定の次元、値がすべて有限の数（bool は除く）、すべて 0 ではないときだけ埋め込みとして使う。それ以外は ValueError（課金された応答なら、トークン数を残して api_error として記録する） |
+| CI-E2 | post | 費用は画像1枚あたりの単価（pricing.yaml の `per_image_usd`、STANDARD_IMAGE）で数える。応答が返った呼び出しは1枚分（埋め込みの形が不正でも課金されたものとする）、応答が返らなかった呼び出しは 0。単価が null なら実行しない。HTTP ヘッダー `x-amzn-bedrock-input-token-count` の値は記録するが、費用には使わない（画像では 0 が返ることを試運転で確認） |
+| CI-E3 | post | 品目ごとに、学習用の埋め込みでコサイン距離の k 近傍（k は正の奇数）の多数決をとる。不良品の割合 p > 0.5 なら NG。confidence は NG なら p、OK なら 1 − p（業務指標のスコアが p になる） |
+| CI-E4 | pre | 再開のとき、埋め込みの中身を決める設定（モデル ID、embeddingPurpose、次元、縮小）が前の記録と違えば、呼ぶ前に止める。k は後から変えてよい |
+| CI-E5 | pre | 学習用とテスト用の画像 ID が1つでも重なれば、呼ぶ前に止める |
+| CI-D1 | post | 学習用の分割（visa_knn_train.csv）は、良品を各品目の train から、不良品を test のうち評価用（visa_test_200・visa_wide_120）に入っていないものから選ぶ（random_state=42）。VisA の 1cls.csv の train に不良品が無いため |
 
 ## 前提（assumption）
 
