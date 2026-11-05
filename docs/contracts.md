@@ -95,6 +95,7 @@
 | CI-MD3 | post | 各課題 per_task 問を、データセットの名前の順に均等に割り振る（150 → 38・38・37・37）。異常の判別は各データセットで良品 q//2、不良品 q−q//2。層の問題が足りなければ止める（他の層で埋めない） |
 | CI-MD4 | post | 層の中は qid の順に並べてから random_state=42 で選ぶ。入力の並びによらず同じ一覧になる |
 | CI-MD5 | post | 画像は scale = min(512/幅, 512/高さ)、大きさ = (int(幅×scale), int(高さ×scale))。小さい画像は拡大する。JPEG（画質95）にする |
+| CI-MD6 | post | 部分集合（subsample_split）は、抜き出し済みの一覧から CI-MD3・MD4 と同じ層の分け方で選ぶ。record_id は元のまま残し、record_id の順に並べる。入力の並びによらず同じ結果 |
 
 ### prompt.py
 
