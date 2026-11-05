@@ -1,0 +1,11 @@
+# 11/19 の記事：Claude Sonnet 4.6、1-shot、オンデマンド（Messages API）。試運転（--limit 10）だけに使う
+name: m1_sonnet46_ondemand
+split: data/splits/mmad_1050.csv
+model_id: jp.anthropic.claude-sonnet-4-6
+api: anthropic
+region: ap-northeast-1
+mode: ondemand
+n_shots: 1
+image_max: 512
+inference: {temperature: 0, maxTokens: 200}
+budget_usd: 0.2

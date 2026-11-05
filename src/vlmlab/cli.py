@@ -5,6 +5,13 @@
   vlmlab run CONFIG [--limit N] [--dry-run]
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
+
+  MMAD（11/19 の記事）
+  vlmlab mmad prepare                  mmad.json を取得し、data/splits/mmad_1050.csv を作り、使う画像だけ取り出す
+  vlmlab mmad run CONFIG [--limit N] [--dry-run]     オンデマンドで回す（試運転は --limit 10）
+  vlmlab mmad batch-prepare CONFIG                   バッチ推論の入力（JSONL）を作る
+  vlmlab mmad batch-collect CONFIG OUT_FILE... [--job-arn ARN]   バッチの出力を記録にする
+  vlmlab mmad report RUN_DIR... --out DIR
 """
 
 from __future__ import annotations
@@ -49,8 +56,37 @@ def main(argv: list[str] | None = None) -> None:
     rp.add_argument("--out", required=True)
     rp.add_argument("--tag", default="summary")
 
+    m = sub.add_parser("mmad", help="MMAD の選択式の問題（11/19 の記事）")
+    msub = m.add_subparsers(dest="mcmd", required=True)
+    mp = msub.add_parser("prepare")
+    mp.add_argument("--mmad-json", default="data/mmad/mmad.json")
+    mp.add_argument("--split", default="data/splits/mmad_1050.csv")
+    mp.add_argument("--per-task", type=int, default=150)
+    mp.add_argument("--images-root", default="data/mmad/images")
+    mp.add_argument("--no-images", action="store_true", help="一覧だけ作り、画像は取らない")
+    mr = msub.add_parser("run")
+    mr.add_argument("config")
+    mr.add_argument("--limit", type=int, default=None)
+    mr.add_argument("--dry-run", action="store_true")
+    mr.add_argument("--pricing", default="pricing.yaml")
+    mr.add_argument("--runs-dir", default="runs")
+    mb = msub.add_parser("batch-prepare")
+    mb.add_argument("config")
+    mb.add_argument("--runs-dir", default="runs")
+    mc = msub.add_parser("batch-collect")
+    mc.add_argument("config")
+    mc.add_argument("output_files", nargs="+")
+    mc.add_argument("--job-arn", default=None)
+    mc.add_argument("--pricing", default="pricing.yaml")
+    mc.add_argument("--runs-dir", default="runs")
+    mrep = msub.add_parser("report")
+    mrep.add_argument("run_dirs", nargs="+")
+    mrep.add_argument("--out", required=True)
+
     a = p.parse_args(argv)
-    if a.cmd == "fetch":
+    if a.cmd == "mmad":
+        _mmad(a)
+    elif a.cmd == "fetch":
         from .data import download, extract
         tar = download(ROOT / a.raw_dir)
         print(f"tar: {tar}")
@@ -94,6 +130,58 @@ def main(argv: list[str] | None = None) -> None:
     elif a.cmd == "report":
         from .report import build_report
         for k, v in build_report(a.run_dirs, a.out, a.tag).items():
+            print(f"{k}: {v}")
+
+
+def _mmad(a: argparse.Namespace) -> None:
+    from .cost import PricingTable
+    from .mmad import data as md
+    from .mmad import run as mrun
+
+    if a.mcmd == "prepare":
+        path = md.fetch_mmad_json(ROOT / a.mmad_json)
+        table = md.question_table(md.load_mmad(path))
+        split = md.sample_questions(table, a.per_task)
+        out = ROOT / a.split
+        out.parent.mkdir(parents=True, exist_ok=True)
+        split.to_csv(out, index=False, lineterminator="\n")
+        print(f"split: {out} ({len(split)} questions)")
+        print(split.groupby(["task", "dataset"]).size().unstack().to_string())
+        if not a.no_images:
+            from .mmad.fetch import fetch_images
+            keys = md.needed_images(split, n_shots=1)
+            print(f"images needed: {len(keys)}")
+            print(fetch_images(keys, ROOT / a.images_root))
+    elif a.mcmd == "run":
+        cfg = mrun.MmadConfig.load(a.config)
+        pricing = PricingTable.load(ROOT / a.pricing)
+        price = pricing.get(cfg.model_id, cfg.pricing_tier)
+        if a.dry_run:
+            split = mrun.select_trial(md.load_split(ROOT / cfg.split), a.limit)
+            print(json.dumps({
+                "run_name": mrun.run_dir(cfg, ROOT / a.runs_dir, a.limit)[0], "calls": len(split),
+                "model_id": cfg.model_id, "api": cfg.api, "price_known": price.runnable,
+                "by_task": split.groupby("task").size().to_dict(),
+            }, ensure_ascii=False, indent=2))
+            return
+        if cfg.api == "converse":
+            from .bedrock import BedrockConverse
+            model = BedrockConverse(cfg.region)
+        else:
+            from .mmad.invoke import BedrockInvokeAnthropic
+            model = BedrockInvokeAnthropic(cfg.region)
+        print(mrun.execute_ondemand(cfg, ROOT, ROOT / a.runs_dir, pricing, model, a.limit))
+    elif a.mcmd == "batch-prepare":
+        cfg = mrun.MmadConfig.load(a.config)
+        print(json.dumps(mrun.prepare_batch(cfg, ROOT, ROOT / a.runs_dir), ensure_ascii=False, indent=2))
+    elif a.mcmd == "batch-collect":
+        cfg = mrun.MmadConfig.load(a.config)
+        pricing = PricingTable.load(ROOT / a.pricing)
+        files = [Path(f) for f in a.output_files]
+        print(mrun.collect_batch(cfg, ROOT, ROOT / a.runs_dir, files, pricing, a.job_arn))
+    elif a.mcmd == "report":
+        from .mmad.report import build_report
+        for k, v in build_report(a.run_dirs, a.out).items():
             print(f"{k}: {v}")
 
 

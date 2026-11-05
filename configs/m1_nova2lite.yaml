@@ -1,0 +1,11 @@
+# 11/19 の記事：Nova 2 Lite、1-shot、オンデマンド（Converse）。試運転は --limit 10
+name: m1_nova2lite
+split: data/splits/mmad_1050.csv
+model_id: jp.amazon.nova-2-lite-v1:0
+api: converse
+region: ap-northeast-1
+mode: ondemand
+n_shots: 1                          # random_templates[0] を見本にする（論文の既定）
+image_max: 512                      # gpt4o.py と同じく縦横とも512px 以内（2026-11-05 決定）
+inference: {temperature: 0, maxTokens: 200}   # maxTokens は gpt4o.py の max_tokens と同じ
+budget_usd: 0.8

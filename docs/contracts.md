@@ -73,3 +73,61 @@
 ## 前提（assumption）
 
 - Bedrock の usage の inputTokens には、キャッシュから読んだトークンは含まれない。キャッシュを使う記事で確かめる
+
+## mmad（11/19 の記事：MMAD の選択式の問題）
+
+参照の作法: jam-cc/MMAD（commit `49db95b`）の `evaluation/examples/GPT4/gpt4o.py` と `evaluation/examples/helper/summary.py`。違いは記事フォルダ（november/2026-11-19_mmad-remeasure）の `results/deviations.md`。目的の整理は同じフォルダの `framing.md`。
+
+### 決めたこと（2026-11-05、利用者が承認）
+
+| ID | 決めたこと |
+| --- | --- |
+| MD-D1 | Sonnet は `jp.anthropic.claude-sonnet-4-6`（5.5 はこのアカウントで使えない） |
+| MD-D2 | 画像は全モデルで縦横とも512px 以内（gpt4o.py と同じ） |
+| MD-D3 | 記号が取れなかった答えは、不正解として数える値（strict）を主にし、分母から外す値（script）も併記する |
+
+### data.py・fetch.py
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-MD1 | pre | mmad.json は固定した commit から取り、SHA-256 が一致しなければ止める |
+| CI-MD2 | post | 1行1問の表。qid = 画像のキー#番号。DS-MVTec は MVTec-AD、Object Structure・Object Details は Object Analysis にまとめる（summary.py と同じ）。is_normal は画像のキーに "good" を含むか。見本は random_templates[0]。知らない課題名・データセット名があれば止める |
+| CI-MD3 | post | 各課題 per_task 問を、データセットの名前の順に均等に割り振る（150 → 38・38・37・37）。異常の判別は各データセットで良品 q//2、不良品 q−q//2。層の問題が足りなければ止める（他の層で埋めない） |
+| CI-MD4 | post | 層の中は qid の順に並べてから random_state=42 で選ぶ。入力の並びによらず同じ一覧になる |
+| CI-MD5 | post | 画像は scale = min(512/幅, 512/高さ)、大きさ = (int(幅×scale), int(高さ×scale))。小さい画像は拡大する。JPEG（画質95）にする |
+
+### prompt.py
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-MP1 | post | 指示文は `prompts/mmad_gpt4o_instruction.txt`（gpt4o.py の instruction を AST で取り出したもの、SHA-256 `634f0999…`）。文 = 指示 + 見本の説明 + "The last image is the query image" + "Following is the question list: " + 改行 + 問題文 |
+| CI-MP2 | post | i 問目の文には、同じ画像の1〜i 問目の問題文を並べる（前の答えは入れない）。選択肢は mmad.json の順のまま（並べ替えない） |
+| CI-MP3 | post | 画像は [見本, 検査対象] の順で文の前。Claude は Messages API の本文（オンデマンドの InvokeModel とバッチで同じもの）、Nova は Converse（layout refs_first） |
+
+### score.py・report.py
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-MS1 | post | 答え = 応答の本文で正規表現 `\b([A-E])\b` に最後に一致した記号。無ければ None。選択肢の文で合わせ直さない |
+| CI-MS2 | pre | 正解が A〜E 以外なら止める |
+| CI-MS3 | post | データセットごとに課題の正答率（%）。異常の判別は、良品と不良品の正答率の平均 |
+| CI-MS4 | post | 各データセットの平均 = 7課題の平均。全体の行 = 各列の、データセット間の単純平均 |
+| CI-MS5 | post | strict は None を不正解として数える。script は A〜E 以外を分母から外す。記号が取れなかった割合も出す |
+| CI-MS6 | post | 分母 0 のセルは None。None を含む平均は None（summary.py は 0 にするが、0 で埋めない） |
+| CI-MS7 | post | 95% 信頼区間は Wilson 区間 |
+
+### run.py・invoke.py
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-MR1 | post | 試運転（--limit N）は、一覧から等間隔に N 問。出力は runs/<name>__trial<N>/ |
+| CI-MR2 | pre | 再開のとき、呼び出しの中身を決める設定（モデル ID、api、mode、見本の枚数、画像の大きさ、temperature、maxTokens、指示文と一覧の SHA-256）が前の記録と違えば止める |
+| CI-MR3 | post | 成功した record_id は飛ばす。API エラーの記録も残す。予算は CI-C4 で見張る |
+| CI-MR4 | post | 集計では、record_id ごとに最後の成功を使い、成功が無ければ最後の失敗を使う。API エラーの問題は正答率の分母から外し、件数を run_summary に出す |
+| CI-MB1 | post | Messages API の応答は text ブロックだけを本文にする（thinking は数だけ extra に残す） |
+| CI-MB2 | pre | バッチの入力は recordId = record_id、modelInput = CI-MP3 の本文。100件（最小件数）未満なら作らない |
+| CI-MB3 | post | バッチの出力に無い問題は api_error の記録にする。一覧に無い recordId、重複した recordId は止める。費用はバッチの単価 |
+
+### summary.py との突き合わせ（2026-11-05、利用者の許可を得て実行）
+
+- mmad_1050.csv の1,050問に、乱数（random.Random(0)、6割は正解・4割は選択肢から無作為）で答えを作り、本物の `caculate_accuracy_mmad`（commit `49db95b`）と `accuracy_table(mode="script")` に同じ答えを入れた。4データセット×7課題と平均の、すべてのセルの差の最大は 1.4e-14（浮動小数点の誤差）。読めない答えを含まない入力での確認なので、summary.py の削除の不具合（deviations.md の 17）は対象外

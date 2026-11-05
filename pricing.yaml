@@ -47,6 +47,59 @@ models:
     model_id_checked_on: "2026-11-05"
     note: 画像のトークン数は解像度で変わる（例 900x900 で約1,300。https://docs.aws.amazon.com/nova/latest/userguide/modalities-image.html）。試運転の usage で確かめる。料金ページとの照合は未
 
+  # ---- Claude（11/19 の記事。AWS Marketplace 経由の課金）----
+  # 単価は AWS Price List API（aws-pricing MCP、service_code=AmazonBedrockFoundationModels、ap-northeast-1）から取った。
+  # 価格表の版 20261012084008（publicationDate 2026-10-12）、effectiveDate 2026-09-01。単位はもともと100万トークンあたり。
+  # jp. は「Regional」（Sonnet 4.6 は「Regional CRIS」）の SKU。キャッシュは使わないので null のまま（使えば実行が止まる）。
+  # 料金ページとの照合は未。詳細は記事フォルダ（november/2026-11-19_mmad-remeasure）の results/pricing_used.md
+  - model_id: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+    service_tier: standard                     # オンデマンド（試運転）
+    input_per_mtok: 1.10                       # APN1-MP:APN1_InputTokenCount-Units
+    output_per_mtok: 5.50                      # APN1-MP:APN1_OutputTokenCount-Units
+    cache_read_per_mtok: null
+    cache_write_per_mtok: null
+    source_url: "AWS Price List API (AmazonBedrockFoundationModels, ap-northeast-1, publicationDate 2026-10-12)"
+    checked_on: "2026-11-05"
+    model_id_source: "aws bedrock list-inference-profiles --region ap-northeast-1（2026-11-05）"
+    model_id_checked_on: "2026-11-05"
+    note: 料金ページとの照合は未
+
+  - model_id: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+    service_tier: batch                        # バッチ推論（本番）
+    input_per_mtok: 0.55                       # APN1-MP:APN1_InputTokenCount_Batch-Units
+    output_per_mtok: 2.75                      # APN1-MP:APN1_OutputTokenCount_Batch-Units
+    cache_read_per_mtok: null
+    cache_write_per_mtok: null
+    source_url: "AWS Price List API (AmazonBedrockFoundationModels, ap-northeast-1, publicationDate 2026-10-12)"
+    checked_on: "2026-11-05"
+    model_id_source: https://docs.aws.amazon.com/bedrock/latest/userguide/batch-inference-supported.html
+    model_id_checked_on: "2026-11-05"
+    note: 料金ページとの照合は未
+
+  - model_id: jp.anthropic.claude-sonnet-4-6
+    service_tier: standard
+    input_per_mtok: 3.30                       # APN1-MP:APN1_InputTokenCount-Units（Regional CRIS）
+    output_per_mtok: 16.50                     # APN1-MP:APN1_OutputTokenCount-Units（Regional CRIS）
+    cache_read_per_mtok: null
+    cache_write_per_mtok: null
+    source_url: "AWS Price List API (AmazonBedrockFoundationModels, ap-northeast-1, publicationDate 2026-10-12)"
+    checked_on: "2026-11-05"
+    model_id_source: "aws bedrock list-inference-profiles --region ap-northeast-1（2026-11-05）"
+    model_id_checked_on: "2026-11-05"
+    note: 料金ページとの照合は未
+
+  - model_id: jp.anthropic.claude-sonnet-4-6
+    service_tier: batch
+    input_per_mtok: 1.65                       # APN1-MP:APN1_InputTokenCount_Batch-Units（Regional CRIS）
+    output_per_mtok: 8.25                      # APN1-MP:APN1_OutputTokenCount_Batch-Units（Regional CRIS）
+    cache_read_per_mtok: null
+    cache_write_per_mtok: null
+    source_url: "AWS Price List API (AmazonBedrockFoundationModels, ap-northeast-1, publicationDate 2026-10-12)"
+    checked_on: "2026-11-05"
+    model_id_source: https://docs.aws.amazon.com/bedrock/latest/userguide/batch-inference-supported.html
+    model_id_checked_on: "2026-11-05"
+    note: 料金ページとの照合は未
+
 # 埋め込み（条件 E。検証セッション2で使う）
 embeddings:
   - model_id: amazon.nova-2-multimodal-embeddings-v1:0

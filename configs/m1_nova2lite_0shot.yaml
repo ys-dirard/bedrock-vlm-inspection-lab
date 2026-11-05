@@ -1,0 +1,11 @@
+# 11/19 の記事：Nova 2 Lite、0-shot（見本なし）。回すかは本番の前に決める（framing.md の SG3）
+name: m1_nova2lite_0shot
+split: data/splits/mmad_1050.csv
+model_id: jp.amazon.nova-2-lite-v1:0
+api: converse
+region: ap-northeast-1
+mode: ondemand
+n_shots: 0
+image_max: 512
+inference: {temperature: 0, maxTokens: 200}
+budget_usd: 0.5

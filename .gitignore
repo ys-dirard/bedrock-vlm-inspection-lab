@@ -16,3 +16,6 @@ __pycache__/
 .venv/
 .pytest_cache/
 *.egg-info/
+
+# MMAD（問題の JSON と画像。data/splits/mmad_1050.csv だけコミットする）
+data/mmad/
