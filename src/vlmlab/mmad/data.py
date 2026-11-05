@@ -113,6 +113,21 @@ def sample_questions(table: pd.DataFrame, per_task: int = 150, seed: int = SEED)
     """
     if table["template"].isna().any():
         raise ValueError("some questions have no random_templates")
+    out = _stratified(table, per_task, seed)
+    out.insert(0, "record_id", [f"m{i + 1:04d}" for i in range(len(out))])
+    return out[SPLIT_COLUMNS]
+
+
+def subsample_split(split: pd.DataFrame, per_task: int, seed: int = SEED) -> pd.DataFrame:
+    """抜き出し済みの一覧から、同じ層の分け方でさらに少なく抜き出す（CI-MD6）。record_id は元のまま残す。
+
+    予算の都合で一部のモデルだけ問題を減らすときに使う（11/19 の Sonnet 4.6）。結果は元の一覧の部分集合。
+    """
+    out = _stratified(split, per_task, seed)
+    return out.sort_values("record_id").reset_index(drop=True)[SPLIT_COLUMNS]
+
+
+def _stratified(table: pd.DataFrame, per_task: int, seed: int) -> pd.DataFrame:
     picks = []
     for task in TASKS:
         for ds, q in quotas(per_task).items():
@@ -125,9 +140,7 @@ def sample_questions(table: pd.DataFrame, per_task: int = 150, seed: int = SEED)
                 if len(stratum) < n:
                     raise ValueError(f"stratum {task}/{ds} has {len(stratum)} questions, need {n}")
                 picks.append(stratum.sort_values("qid").sample(n=n, random_state=seed).sort_values("qid"))
-    out = pd.concat(picks, ignore_index=True)
-    out.insert(0, "record_id", [f"m{i + 1:04d}" for i in range(len(out))])
-    return out[SPLIT_COLUMNS]
+    return pd.concat(picks, ignore_index=True)
 
 
 def load_split(path: str | Path) -> pd.DataFrame:

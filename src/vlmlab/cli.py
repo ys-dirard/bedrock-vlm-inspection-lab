@@ -8,6 +8,7 @@
 
   MMAD（11/19 の記事）
   vlmlab mmad prepare                  mmad.json を取得し、data/splits/mmad_1050.csv を作り、使う画像だけ取り出す
+  vlmlab mmad subsample --per-task N --out CSV     一覧をさらに減らす（record_id は元のまま）
   vlmlab mmad run CONFIG [--limit N] [--dry-run]     オンデマンドで回す（試運転は --limit 10）
   vlmlab mmad batch-prepare CONFIG                   バッチ推論の入力（JSONL）を作る
   vlmlab mmad batch-collect CONFIG OUT_FILE... [--job-arn ARN]   バッチの出力を記録にする
@@ -64,6 +65,10 @@ def main(argv: list[str] | None = None) -> None:
     mp.add_argument("--per-task", type=int, default=150)
     mp.add_argument("--images-root", default="data/mmad/images")
     mp.add_argument("--no-images", action="store_true", help="一覧だけ作り、画像は取らない")
+    ms = msub.add_parser("subsample", help="抜き出し済みの一覧から、同じ層の分け方でさらに減らす（record_id は元のまま）")
+    ms.add_argument("--src", default="data/splits/mmad_1050.csv")
+    ms.add_argument("--per-task", type=int, required=True)
+    ms.add_argument("--out", required=True)
     mr = msub.add_parser("run")
     mr.add_argument("config")
     mr.add_argument("--limit", type=int, default=None)
@@ -152,6 +157,12 @@ def _mmad(a: argparse.Namespace) -> None:
             keys = md.needed_images(split, n_shots=1)
             print(f"images needed: {len(keys)}")
             print(fetch_images(keys, ROOT / a.images_root))
+    elif a.mcmd == "subsample":
+        sub = md.subsample_split(md.load_split(ROOT / a.src), a.per_task)
+        out = ROOT / a.out
+        sub.to_csv(out, index=False, lineterminator="\n")
+        print(f"split: {out} ({len(sub)} questions)")
+        print(sub.groupby(["task", "dataset"]).size().unstack().to_string())
     elif a.mcmd == "run":
         cfg = mrun.MmadConfig.load(a.config)
         pricing = PricingTable.load(ROOT / a.pricing)

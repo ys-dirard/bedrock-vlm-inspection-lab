@@ -1,0 +1,12 @@
+# 11/19 の記事：Claude Sonnet 4.6、1-shot、オンデマンド（Messages API）、644問
+# バッチ推論がアカウントで使えず、予算に合わせて減らした（deviations.md の 24・25）
+name: m1_sonnet46_644
+split: data/splits/mmad_644.csv     # mmad_1050.csv から各課題92問（各データセット23問）、record_id は元のまま
+model_id: jp.anthropic.claude-sonnet-4-6
+api: anthropic
+region: ap-northeast-1
+mode: ondemand
+n_shots: 1
+image_max: 512
+inference: {temperature: 0, maxTokens: 1024}   # gpt4o.py は 200。Claude の応答が切れたので上げた（2026-11-05 決定、deviations.md の 23）
+budget_usd: 3.0

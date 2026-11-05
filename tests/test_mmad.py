@@ -104,6 +104,19 @@ def test_sample_refuses_short_stratum():
         md.sample_questions(t, per_task=40)
 
 
+def test_subsample_keeps_record_ids_and_strata():
+    """CI-MD6: 部分集合で、record_id は元のまま、層ごとの件数は quotas どおり、同じシードで同じ結果。"""
+    t = md.question_table(synthetic_mmad(6))
+    full = md.sample_questions(t, per_task=12)
+    sub = md.subsample_split(full, per_task=8)
+    assert len(sub) == 56 and set(sub["qid"]) <= set(full["qid"])
+    merged = sub.merge(full, on="qid", suffixes=("", "_full"))
+    assert (merged["record_id"] == merged["record_id_full"]).all()
+    assert (sub.groupby(["task", "dataset"]).size() == 2).all()
+    pd.testing.assert_frame_equal(sub, md.subsample_split(full.sample(frac=1, random_state=1), per_task=8))
+    assert list(sub["record_id"]) == sorted(sub["record_id"])
+
+
 def _png(w: int, h: int) -> bytes:
     buf = io.BytesIO()
     Image.new("RGB", (w, h), (120, 30, 200)).save(buf, format="PNG")
