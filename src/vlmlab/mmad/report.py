@@ -54,12 +54,20 @@ def summarize_run(df: pd.DataFrame) -> dict[str, Any]:
     }
 
 
-def build_report(run_dirs: list[str | Path], out_dir: str | Path) -> dict[str, Path]:
+def build_report(run_dirs: list[str | Path], out_dir: str | Path, subset: set[str] | None = None) -> dict[str, Path]:
+    """subset を渡すと、その record_id だけで集計する（CI-MR5。問題数の違うモデルを同じ問題で比べるため）。
+
+    subset にある record_id が記録に無ければ ValueError（そろわないまま比べない）。
+    """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     subtask, source, per_q, summary = [], [], [], []
     for rd in run_dirs:
         df = load_calls(rd)
+        if subset is not None:
+            if missing := subset - set(df["record_id"]):
+                raise ValueError(f"{rd} lacks {len(missing)} record_ids of the subset, e.g. {sorted(missing)[:3]}")
+            df = df[df["record_id"].isin(subset)].reset_index(drop=True)
         info = summarize_run(df)
         summary.append(info)
         answered = df[df["api_error"].isna()]  # API エラーは集計から除き、件数を run_summary に出す

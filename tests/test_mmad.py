@@ -450,3 +450,16 @@ def test_build_report_end_to_end(tmp_path):
     assert set(sub["count"]) == {"strict", "script"} and "Average" in sub.columns
     summ = pd.read_csv(paths["run_summary"])
     assert summ.loc[0, "n_questions"] == 56 and summ.loc[0, "n_api_error"] == 0
+
+
+def test_build_report_subset(tmp_path):
+    """CI-MR5: subset の record_id だけで集計する。記録に無い record_id があれば止める。"""
+    mmad, split = _setup(tmp_path)
+    out = mrun.execute_ondemand(_cfg(), tmp_path, tmp_path / "runs", PRICING, FakeConverse(), mmad=mmad,
+                                image_loader=LOADER)
+    subset = set(split["record_id"][:28])
+    paths = build_report([out], tmp_path / "rep", subset)
+    assert pd.read_csv(paths["run_summary"]).loc[0, "n_questions"] == 28
+    assert len(pd.read_csv(paths["per_question"])) == 28
+    with pytest.raises(ValueError, match="lacks"):
+        build_report([out], tmp_path / "rep2", subset | {"m9999"})

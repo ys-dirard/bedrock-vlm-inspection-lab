@@ -87,6 +87,7 @@ def main(argv: list[str] | None = None) -> None:
     mrep = msub.add_parser("report")
     mrep.add_argument("run_dirs", nargs="+")
     mrep.add_argument("--out", required=True)
+    mrep.add_argument("--subset", default=None, help="この一覧（CSV）の record_id だけで集計する")
 
     a = p.parse_args(argv)
     if a.cmd == "mmad":
@@ -192,7 +193,8 @@ def _mmad(a: argparse.Namespace) -> None:
         print(mrun.collect_batch(cfg, ROOT, ROOT / a.runs_dir, files, pricing, a.job_arn))
     elif a.mcmd == "report":
         from .mmad.report import build_report
-        for k, v in build_report(a.run_dirs, a.out).items():
+        subset = set(md.load_split(ROOT / a.subset)["record_id"]) if a.subset else None
+        for k, v in build_report(a.run_dirs, a.out, subset).items():
             print(f"{k}: {v}")
 
 
