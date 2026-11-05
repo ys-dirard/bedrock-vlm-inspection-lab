@@ -7,5 +7,5 @@ region: ap-northeast-1
 mode: ondemand
 n_shots: 1                          # random_templates[0] を見本にする（論文の既定）
 image_max: 512                      # gpt4o.py と同じく縦横とも512px 以内（2026-11-05 決定）
-inference: {temperature: 0, maxTokens: 200}   # maxTokens は gpt4o.py の max_tokens と同じ
+inference: {temperature: 0, maxTokens: 1024}   # gpt4o.py は 200。Claude の応答が切れたので上げた（2026-11-05 決定、deviations.md の 23）
 budget_usd: 0.8

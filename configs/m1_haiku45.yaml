@@ -7,5 +7,5 @@ region: ap-northeast-1
 mode: batch
 n_shots: 1
 image_max: 512
-inference: {temperature: 0, maxTokens: 200}
+inference: {temperature: 0, maxTokens: 1024}   # gpt4o.py は 200。Claude の応答が切れたので上げた（2026-11-05 決定、deviations.md の 23）
 budget_usd: 1.2
