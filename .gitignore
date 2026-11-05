@@ -1,0 +1,18 @@
+# データ本体（data/README.md の手順で取得する）
+data/raw/
+data/visa/
+
+# 実行結果（記事のフォルダの results/ にコピーする）
+runs/
+
+# 認証情報
+.env
+.env.*
+.aws/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/

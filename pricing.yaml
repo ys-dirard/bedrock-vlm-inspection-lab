@@ -1,0 +1,56 @@
+# 単価表（USD / 100万トークン）。実行の直前に料金ページで確かめ、出典と確認日を書く。
+# 確かめられなかった単価は null のままにする。入力か出力の単価が null のモデルは `vlmlab run` が実行を断る。
+# 料金ページ: https://aws.amazon.com/bedrock/pricing/
+#
+# 2026-11-05 時点で確かめられたのはモデル ID だけで、単価はまだ確かめていない
+#   - aws-pricing MCP は AWS のプロファイル（default）が無いため呼べなかった
+#   - 料金ページは、Nova の表の数値を読み出せなかった
+#   - 参考値（未確認）: Nova 2 Lite は入力 0.30・出力 2.50（AWS ML ブログ 2026-06-29。リージョン・プロファイルの記載なし）、
+#     global は入力 0.33・出力 2.75 という情報もある（2026-11-02 のメモ。出典は未確認）
+
+models:
+  - model_id: jp.amazon.nova-2-lite-v1:0       # JP Geo（ap-northeast-1 / ap-northeast-3 で処理）
+    service_tier: standard
+    input_per_mtok: null
+    output_per_mtok: null
+    cache_read_per_mtok: null
+    cache_write_per_mtok: null
+    source_url: null
+    checked_on: null
+    model_id_source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html
+    model_id_checked_on: "2026-11-05"
+    note: 画像は解像度によらず1枚230トークンで課金（https://docs.aws.amazon.com/nova/latest/nova2-userguide/using-multimodal-models.html、2026-11-05 確認）
+
+  - model_id: global.amazon.nova-2-lite-v1:0   # Global（東京は送信元リージョンとして掲載）
+    service_tier: standard
+    input_per_mtok: null
+    output_per_mtok: null
+    cache_read_per_mtok: null
+    cache_write_per_mtok: null
+    source_url: null
+    checked_on: null
+    model_id_source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html
+    model_id_checked_on: "2026-11-05"
+
+  - model_id: apac.amazon.nova-pro-v1:0        # APAC Geo。jp. のプロファイルは無い（global も非対応）
+    service_tier: standard
+    input_per_mtok: null
+    output_per_mtok: null
+    cache_read_per_mtok: null
+    cache_write_per_mtok: null
+    source_url: null
+    checked_on: null
+    model_id_source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-pro.html
+    model_id_checked_on: "2026-11-05"
+    note: 画像のトークン数は解像度で変わる（例 900x900 で約1,300。https://docs.aws.amazon.com/nova/latest/userguide/modalities-image.html）。試運転の usage で確かめる
+
+# 埋め込み（条件 E。検証セッション2で使う）。1枚あたりの単価
+embeddings:
+  - model_id: amazon.nova-2-multimodal-embeddings-v1:0
+    region: us-east-1                          # モデルカードの表は us-east-1（と us-gov-west-1）のみ。Geo / Global は非対応
+    per_image_usd: null
+    per_mtok_text_usd: null
+    source_url: null
+    checked_on: null
+    model_id_source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-amazon-nova-multimodal-embeddings.html
+    model_id_checked_on: "2026-11-05"
