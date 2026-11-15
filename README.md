@@ -25,7 +25,8 @@ bedrock-vlm-inspection-lab/
 │   ├── metrics.py          評価指標
 │   ├── cost.py             単価表と費用の計算、累計費用での停止
 │   ├── report.py           集計表（CSV と Markdown）を出す
-│   └── cli.py              コマンドライン（vlmlab）
+│   ├── cli.py              コマンドライン（vlmlab）
+│   └── mmad/               MMAD の選択式の問題（取得・プロンプト・呼び出し・採点・集計）
 ├── tests/                  単体テスト
 ├── pricing.yaml            単価表
 └── runs/                   実行結果（コミットしない）
@@ -140,3 +141,20 @@ uv run vlmlab report runs/n1_A runs/n1_B runs/n1_C --out results --tag summary_2
 ## データ
 
 [VisA](https://registry.opendata.aws/visa/)（Zou et al., ECCV 2022、CC BY 4.0）を使います。データ本体はコミットしていません。取得方法は [data/README.md](data/README.md) を見てください。
+
+## MMAD の選択式の問題（11/19 の記事）
+
+[MMAD](https://github.com/jam-cc/MMAD)（ICLR 2025）の選択式の問題を、Bedrock の VLM に解かせて正答率を出します。プロンプト・画像の縮小・回答の読み取り・集計は、公式の評価スクリプト（commit `49db95b` の `evaluation/examples/GPT4/gpt4o.py` と `helper/summary.py`）に合わせています。違うところ（temperature 0、maxTokens 1,024 など）は記事に書いています。
+
+```bash
+uv run vlmlab mmad prepare                                  # mmad.json を取り（SHA-256 を確認）、使う画像だけを Hugging Face の ZIP から部分的に取り出す（約2.2 GB）
+uv run vlmlab mmad run configs/m1_nova2lite.yaml --limit 10 # 試運転
+uv run vlmlab mmad run configs/m1_nova2lite.yaml            # 本番
+uv run vlmlab mmad report runs/m1_nova2lite runs/m1_haiku45_ondemand --out results
+uv run vlmlab mmad report runs/... --out results644 --subset data/splits/mmad_644.csv   # 同じ問題にそろえて集計
+```
+
+- 使った問題の一覧は `data/splits/mmad_1050.csv`（7課題×150問、random_state=42）と `mmad_644.csv`（そこから各課題92問。record_id は共通）
+- 設定は `configs/m1_*.yaml`。Claude は Messages API の本文（InvokeModel）、Nova 2 Lite は Converse で呼びます
+- `vlmlab mmad batch-prepare` / `batch-collect` はバッチ推論用ですが、アカウントでバッチ推論が許可されておらず、ジョブでは試せていません
+- 問題と画像はコミットしていません。MMAD は研究目的での利用とされています。画像の元のデータセット（MVTec AD・MVTec LOCO・VisA・GoodsAD など）のライセンスにも従ってください
