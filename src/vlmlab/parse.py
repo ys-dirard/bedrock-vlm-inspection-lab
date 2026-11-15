@@ -122,11 +122,12 @@ def parse_object(
     return obj, None
 
 
-def parse_response(raw_text: str | None, spec: ParseSpec | None = None) -> ParseResult:
+def parse_response(raw_text: str | None, spec: ParseSpec | None = None,
+                   stop_reason: str | None = None) -> ParseResult:
     """応答を読み取り、判定（OK/NG）と確信度に直す。例外は投げない（CI-P2）。"""
     spec = spec or ParseSpec()
     if spec.mode == "boxes":
-        return _parse_boxes(raw_text)
+        return _parse_boxes(raw_text, stop_reason)
     obj, err = parse_object(raw_text, spec.allow_code_fence, spec.allow_trailing_code_fence)
     if obj is None:
         return _fail(err or "unknown")
@@ -189,11 +190,11 @@ def _parse_objects(obj: dict[str, Any], spec: ParseSpec) -> ParseResult:
     return ParseResult(parsed=obj, pred=pred, confidence=None, defect=defect, parse_error=None)
 
 
-def _parse_boxes(raw_text: str | None) -> ParseResult:
-    """枠の応答（12/2 の記事）。JSON ではなく [x1, y1, x2, y2] の並びを読む（CI-L1〜L3）。"""
+def _parse_boxes(raw_text: str | None, stop_reason: str | None = None) -> ParseResult:
+    """枠の応答（12/2 の記事）。JSON ではなく [x1, y1, x2, y2] の並びを読む（CI-L1〜L3、L2b）。"""
     from .localization import parse_boxes
 
-    bp = parse_boxes(raw_text)
+    bp = parse_boxes(raw_text, stop_reason)
     if bp.boxes is None:
         return _fail(bp.error or "unknown")
     parsed = {"boxes": [list(b) for b in bp.boxes]}

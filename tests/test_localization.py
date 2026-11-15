@@ -59,6 +59,33 @@ def test_parse_boxes_none_and_empty():
     assert L.parse_boxes(None).error.startswith("empty")
 
 
+def test_parse_boxes_truncated_is_failure():
+    """CI-L2b：stopReason が max_tokens なら、閉じた [...] があっても解析失敗"""
+    text = "[10, 20, 30, 40]\n1. Scratches: [50, 60, 70, 80]\n2. Cracks: [90,"
+    assert L.parse_boxes(text).boxes == [(10, 20, 30, 40), (50, 60, 70, 80)]  # stop_reason なしでは読める
+    bp = L.parse_boxes(text, "max_tokens")
+    assert bp.boxes is None and bp.error == L.TRUNCATED
+    assert L.parse_boxes("NONE", "max_tokens").boxes is None
+    assert L.parse_boxes("[10, 20, 30, 40]", "end_turn").boxes == [(10, 20, 30, 40)]
+    r = parse_response(text, ParseSpec.from_dict({"mode": "boxes"}), "max_tokens")
+    assert r.pred is None and r.parse_error == L.TRUNCATED
+
+
+def test_error_kind():
+    assert L.error_kind(None) is None
+    assert L.error_kind(L.parse_boxes("x", "max_tokens").error) == "truncated"
+    assert L.error_kind(L.parse_boxes("[1, 2, 3, 4] NONE").error) == "both_none_and_boxes"
+    assert L.error_kind(L.parse_boxes("").error) == "empty"
+    assert L.error_kind(L.parse_boxes("[1, 2]").error) == "other"
+
+
+def test_area_fraction():
+    """CI-L14：0〜1000 の枠が領域に占める面積の割合"""
+    assert L.area_fraction((0, 0, 1000, 1000)) == 1.0
+    assert L.area_fraction((0, 0, 500, 1000)) == 0.5
+    assert L.area_fraction((100, 100, 200, 300)) == pytest.approx(0.02)
+
+
 def test_parse_response_boxes_mode():
     """CI-L3：parsed に枠、pred は枠があれば NG"""
     spec = ParseSpec.from_dict({"mode": "boxes"})
@@ -208,15 +235,18 @@ def test_set_iou_and_jitter():
 
 def test_repeat_metrics_denominators():
     """CI-L11：解析失敗・欠けは分母から除く。分母 0 は None"""
+    none = {"n_pred": None, "hit": None, "center_hit": None, "n_pred_hit": None, "n_pred_center_hit": None,
+            "gt_best_iou": None, "n_split_gt": None, "hit_excl_large": None, "box_area_fractions": None,
+            "n_calls_truncated": 0, "n_calls_both_none_and_boxes": 0, "n_calls_other_fail": 0}
     img = pd.DataFrame([
-        {"label": "anomaly", "status": "ok", "n_pred": 1, "hit": True, "center_hit": False, "n_pred_hit": 1,
-         "n_pred_center_hit": 0, "gt_best_iou": json.dumps([0.6, 0.05]), "n_split_gt": None},
-        {"label": "anomaly", "status": "ok", "n_pred": 0, "hit": False, "center_hit": False, "n_pred_hit": 0,
-         "n_pred_center_hit": 0, "gt_best_iou": json.dumps([0.0]), "n_split_gt": None},
-        {"label": "anomaly", "status": "parse_fail", "n_pred": None, "hit": None, "center_hit": None,
-         "n_pred_hit": None, "n_pred_center_hit": None, "gt_best_iou": None, "n_split_gt": None},
-        {"label": "anomaly", "status": "incomplete", "n_pred": None, "hit": None, "center_hit": None,
-         "n_pred_hit": None, "n_pred_center_hit": None, "gt_best_iou": None, "n_split_gt": None},
+        {**none, "label": "anomaly", "status": "ok", "n_pred": 1, "hit": True, "center_hit": False, "n_pred_hit": 1,
+         "n_pred_center_hit": 0, "gt_best_iou": json.dumps([0.6, 0.05]), "hit_excl_large": False,
+         "box_area_fractions": json.dumps([0.8])},
+        {**none, "label": "anomaly", "status": "ok", "n_pred": 0, "hit": False, "center_hit": False, "n_pred_hit": 0,
+         "n_pred_center_hit": 0, "gt_best_iou": json.dumps([0.0]), "hit_excl_large": False,
+         "box_area_fractions": json.dumps([])},
+        {**none, "label": "anomaly", "status": "parse_fail", "n_calls_truncated": 1},
+        {**none, "label": "anomaly", "status": "incomplete"},
     ])
     m = repeat_metrics(img)
     assert m["n_anomaly_valid"] == 2 and m["n_parse_fail"] == 1 and m["n_incomplete"] == 1
@@ -227,6 +257,10 @@ def test_repeat_metrics_denominators():
     assert m["box_hit_precision"] == 1.0
     assert m["false_positive_rate"] is None  # 良品なし
     assert m["n_split_gt"] is None
+    # CI-L14：大きな枠（面積の割合 0.8）だけで当たった画像は、大きな枠を除くと外れ
+    assert m["hit_rate_excl_large"] == 0.0
+    assert m["box_area_fraction"] == pytest.approx(0.8) and m["large_box_share"] == 1.0
+    assert m["n_calls_truncated"] == 1
 
 
 # ---------------------------------------------------------------- 通し（run.py の tiles と locreport）
@@ -234,14 +268,21 @@ def test_repeat_metrics_denominators():
 class BoxModel:
     """検査対象の画像（最後の画像）の白い画素の外接矩形を 0〜1000 で返す。白が無ければ NONE。"""
 
-    def __init__(self, broken_calls=()):
+    def __init__(self, broken_calls=(), truncated_calls=(), full_box=False):
         self.requests = []
         self.broken = set(broken_calls)
+        self.truncated = set(truncated_calls)
+        self.full_box = full_box
 
     def invoke(self, req):
         self.requests.append(req)
         if len(self.requests) in self.broken:
             return ModelResponse(raw_text="I cannot tell.", input_tokens=500, output_tokens=5, latency_s=0.5)
+        if len(self.requests) in self.truncated:
+            return ModelResponse(raw_text="[0, 0, 10, 10] and then", input_tokens=500, output_tokens=600,
+                                 latency_s=0.5, stop_reason="max_tokens")
+        if self.full_box:  # 位置を答えず、画像全体の枠だけを返す
+            return ModelResponse(raw_text="[0, 0, 1000, 1000]", input_tokens=500, output_tokens=20, latency_s=1.0)
         with Image.open(io.BytesIO(req.images[-1].data)) as im:
             a = np.asarray(im.convert("L")) > 128
             w, h = im.size
@@ -359,6 +400,23 @@ def test_locreport_end_to_end(loclab):
     assert j.loc[("A", "anomaly"), "pair_iou_mean"] == pytest.approx(1.0)
     assert j.loc[("A", "normal"), "n_pairs_both_empty"] == 2
     assert j.loc[("A", "anomaly"), "identical_text_rate"] == 1.0
+
+
+def test_locreport_large_boxes_and_truncation(loclab):
+    """CI-L14・L2b：画像全体の枠だけなら当たり率は 1 だが、大きな枠を除くと 0。切れた応答は解析失敗として数える"""
+    base, visa, pricing = loclab
+    plan = plan_run(RunConfig.load(base / "A.yaml"), base, base / "runs")
+    model = BoxModel(full_box=True)
+    model.truncated = {1}
+    execute(plan, model, pricing, visa, base, log=lambda _: None)
+    recs = [json.loads(l) for l in (plan.out_dir / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert recs[0]["parse_error"] == L.TRUNCATED  # 記録の時点でも解析失敗
+    paths = build_loc_report([base / "runs" / "A"], base / "out", visa, base)
+    s = pd.read_csv(paths["summary"]).iloc[0]
+    assert s["hit_rate_mean"] == 1.0 and s["hit_rate_excl_large_mean"] == 0.0
+    assert s["box_area_fraction_mean"] == 1.0 and s["large_box_share_mean"] == 1.0
+    assert s["n_calls_truncated_sum"] == 1 and s["n_parse_fail_sum"] == 1
+    assert s["false_positive_rate_mean"] == 1.0
 
 
 def test_locreport_rejects_mask_size_mismatch(loclab):

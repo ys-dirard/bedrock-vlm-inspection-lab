@@ -265,7 +265,7 @@ def make_record(cfg: RunConfig, run_id: str, run_name: str, repeat: int, row: An
                 resp: ModelResponse, spec: ParseSpec, price, identity: dict[str, Any],
                 called_at: str, tile: int | None = None,
                 tile_region: tuple[int, int, int, int] | None = None) -> dict[str, Any]:
-    pr = parse_response(resp.raw_text, spec) if resp.api_error is None else None
+    pr = parse_response(resp.raw_text, spec, resp.stop_reason) if resp.api_error is None else None
     return {
         "run_name": run_name,
         "run_id": run_id,

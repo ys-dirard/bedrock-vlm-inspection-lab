@@ -30,7 +30,8 @@ def load_run(run_dir: str | Path, parse_override: dict[str, Any] | None = None) 
     if "tile" in df and df["tile"].notna().any():
         raise ValueError(f"{run_dir} was split into tiles; use `vlmlab locreport` (one image = several calls)")
     ok = df[df["api_error"].isna()].drop_duplicates(["image_id", "repeat"], keep="last").copy()
-    parsed = [parse_response(t, spec) for t in ok["raw_text"]]
+    stops = ok["stop_reason"] if "stop_reason" in ok else [None] * len(ok)
+    parsed = [parse_response(t, spec, sr) for t, sr in zip(ok["raw_text"], stops)]  # stop_reason は boxes だけが使う
     ok["pred"] = [p.pred for p in parsed]
     ok["confidence"] = [p.confidence for p in parsed]
     ok["defect"] = [p.defect for p in parsed]

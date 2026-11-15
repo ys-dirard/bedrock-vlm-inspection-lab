@@ -79,7 +79,8 @@ def score_images(calls: pd.DataFrame, cfg: dict[str, Any], truth: _Truth) -> pd.
         g = g.sort_values("tile_key")
         first = g.iloc[0]
         (w, h), mask, gts = truth.get(image_id, first["path"], first["label"])
-        parses = [L.parse_boxes(t) for t in g["raw_text"]]
+        parses = [L.parse_boxes(t, sr) for t, sr in zip(g["raw_text"], g["stop_reason"])]
+        kinds = [L.error_kind(p.error) for p in parses]
         row: dict[str, Any] = {
             "run_name": first["run_name"], "image_id": image_id, "category": first["category"],
             "label": first["label"], "repeat": int(repeat), "n_calls": len(g),
@@ -88,6 +89,10 @@ def score_images(calls: pd.DataFrame, cfg: dict[str, Any], truth: _Truth) -> pd.
             "cost_usd": None if g["cost_usd"].isna().any() else float(g["cost_usd"].sum()),
             "raw_text": json.dumps(list(g["raw_text"]), ensure_ascii=False) if tiles else first["raw_text"],
             "n_gt": len(gts),
+            # 呼び出し単位の解析失敗の種類（条件 C は4回分）
+            "n_calls_truncated": kinds.count("truncated"),
+            "n_calls_both_none_and_boxes": kinds.count("both_none_and_boxes"),
+            "n_calls_other_fail": kinds.count("other") + kinds.count("empty"),
         }
         errors = [p.error for p in parses if p.boxes is None]
         if len(g) < expected:
@@ -100,18 +105,24 @@ def score_images(calls: pd.DataFrame, cfg: dict[str, Any], truth: _Truth) -> pd.
             rows.append(row)
             continue
         pred: list[tuple[int, L.Box]] = []
+        fracs: list[float] = []
         for (_, c), p in zip(g.iterrows(), parses):
             region = tuple(c["tile_region"]) if tiles else (0, 0, w, h)
             pred += [(int(c["tile_key"]), L.norm_to_px(b, region)) for b in p.boxes]  # type: ignore[union-attr]
+            fracs += [L.area_fraction(b) for b in p.boxes]  # type: ignore[union-attr]
         boxes = [b for _, b in pred]
+        small = [b for b, f in zip(boxes, fracs) if f < LARGE_BOX_FRACTION]
         row["n_pred"] = len(boxes)
+        row["n_pred_large"] = len(boxes) - len(small)
+        row["box_area_fractions"] = json.dumps([round(f, 6) for f in fracs])
         row["pred_boxes_px"] = json.dumps([[round(v, 2) for v in b] for b in boxes])
         if first["label"] == "anomaly":
             s = L.score_anomaly(boxes, mask, gts)  # type: ignore[arg-type]
             row.update(hit=s.hit, center_hit=s.center_hit, n_pred_hit=s.n_pred_hit,
                        n_pred_center_hit=s.n_pred_center_hit,
                        gt_best_iou=json.dumps([round(v, 6) for v in s.gt_best_iou]),
-                       n_split_gt=L.split_gt_count(gts, pred) if tiles else None)
+                       n_split_gt=L.split_gt_count(gts, pred) if tiles else None,
+                       hit_excl_large=any(L.box_hits_mask(b, mask) for b in small))  # CI-L14
         rows.append(row)
     seen = {(r["image_id"], r["repeat"]) for r in rows}
     for k in calls.attrs.get("all_keys", []):
@@ -125,7 +136,10 @@ def score_images(calls: pd.DataFrame, cfg: dict[str, Any], truth: _Truth) -> pd.
     return out
 
 
-SCORE_COLUMNS = ["n_pred", "pred_boxes_px", "hit", "center_hit", "n_pred_hit", "n_pred_center_hit",
+LARGE_BOX_FRACTION = 0.5  # 画像（タイル）の面積の半分以上を覆う枠を「大きな枠」とする（CI-L14）
+
+SCORE_COLUMNS = ["n_pred", "n_pred_large", "box_area_fractions", "hit_excl_large", "n_calls_truncated",
+                 "n_calls_both_none_and_boxes", "n_calls_other_fail", "pred_boxes_px", "hit", "center_hit", "n_pred_hit", "n_pred_center_hit",
                  "gt_best_iou", "n_split_gt", "latency_s", "input_tokens", "output_tokens", "cost_usd",
                  "raw_text", "n_gt"]
 
@@ -143,6 +157,7 @@ def repeat_metrics(img: pd.DataFrame) -> dict[str, Any]:
     ious = [v for s in an_ok.get("gt_best_iou", pd.Series(dtype=object)) for v in json.loads(s)]
     n_pred_an = int(an_ok["n_pred"].sum()) if len(an_ok) else 0
     attempted = img[img["status"] != "incomplete"]
+    fr = _fractions(img[img["status"] == "ok"])
     return {
         "n_anomaly_valid": len(an_ok),
         "n_normal_valid": len(no_ok),
@@ -150,6 +165,7 @@ def repeat_metrics(img: pd.DataFrame) -> dict[str, Any]:
         "n_incomplete": int((img["status"] == "incomplete").sum()),
         "parse_fail_rate": _div(int((attempted["status"] == "parse_fail").sum()), len(attempted)),
         "hit_rate": _div(int(an_ok["hit"].sum()), len(an_ok)) if len(an_ok) else None,
+        "hit_rate_excl_large": _div(int(an_ok["hit_excl_large"].sum()), len(an_ok)) if len(an_ok) else None,
         "center_hit_rate": _div(int(an_ok["center_hit"].sum()), len(an_ok)) if len(an_ok) else None,
         "anomaly_no_box_rate": _div(int((an_ok["n_pred"] == 0).sum()), len(an_ok)),
         "box_hit_precision": _div(int(an_ok["n_pred_hit"].sum()), n_pred_an) if len(an_ok) else None,
@@ -160,10 +176,20 @@ def repeat_metrics(img: pd.DataFrame) -> dict[str, Any]:
         "gt_recall_iou10": _div(sum(v >= 0.1 for v in ious), len(ious)),
         "false_positive_rate": _div(int((no_ok["n_pred"] > 0).sum()), len(no_ok)),
         "boxes_per_anomaly": _div(n_pred_an, len(an_ok)),
+        "box_area_fraction": float(np.mean(fr)) if fr else None,
+        "large_box_share": _div(sum(f >= LARGE_BOX_FRACTION for f in fr), len(fr)),
+        "n_calls_truncated": int(img["n_calls_truncated"].fillna(0).sum()),
+        "n_calls_both_none_and_boxes": int(img["n_calls_both_none_and_boxes"].fillna(0).sum()),
+        "n_calls_other_fail": int(img["n_calls_other_fail"].fillna(0).sum()),
         "boxes_per_normal": _div(int(no_ok["n_pred"].sum()) if len(no_ok) else 0, len(no_ok)),
         "n_split_gt": (int(an_ok["n_split_gt"].sum()) if "n_split_gt" in an_ok and an_ok["n_split_gt"].notna().any()
                        else None),
     }
+
+
+def _fractions(ok: pd.DataFrame) -> list[float]:
+    """有効な画像（不良・良品とも）の、すべての枠の面積の割合（CI-L14）。"""
+    return [f for s in ok["box_area_fractions"].dropna() for f in json.loads(s)]
 
 
 MINMAX = ("hit_rate", "center_hit_rate", "iou_mean", "false_positive_rate")
@@ -281,12 +307,17 @@ def to_markdown(s: pd.DataFrame) -> str:
         ("n_normal_valid_sum", "有効な良品（全回）", None),
         ("parse_fail_rate_mean", "解析失敗率", 3),
         ("hit_rate_mean", "当たり率", 3),
+        ("hit_rate_excl_large_mean", "当たり率(大きな枠を除く)", 3),
         ("center_hit_rate_mean", "中心の当たり率", 3),
         ("iou_mean_mean", "IoU 平均", 3),
         ("iou50_rate_mean", "IoU≥0.5", 3),
         ("gt_recall_iou10_mean", "再現率(IoU≥0.1)", 3),
         ("false_positive_rate_mean", "誤検知率", 3),
         ("box_hit_precision_mean", "枠単位の当たり", 3),
+        ("box_area_fraction_mean", "枠の面積の割合", 3),
+        ("large_box_share_mean", "大きな枠の割合", 3),
+        ("n_calls_truncated_sum", "切れた応答", None),
+        ("n_calls_both_none_and_boxes_sum", "枠とNONE", None),
         ("latency_p50_s", "p50 (秒)", 2),
         ("latency_p95_s", "p95 (秒)", 2),
         ("input_tokens_per_image_mean", "入力トークン/枚", 0),
@@ -297,5 +328,6 @@ def to_markdown(s: pd.DataFrame) -> str:
     for _, r in s.iterrows():
         lines.append("| " + " | ".join(_fmt(r.get(k), d) for k, _, d in cols) + " |")
     note = ("\n指標は回ごとに計算した平均。解析失敗と欠けた画像は分母から除く（CI-L11、L12）。"
-            "条件 C のレイテンシ・トークン・費用は4回の合計。\n")
+            "条件 C のレイテンシ・トークン・費用は4回の合計。大きな枠 = 画像（条件 C はタイル）の面積の半分以上を覆う枠（CI-L14）。"
+            "「切れた応答」「枠とNONE」は、その理由で解析失敗になった呼び出しの数（全回の合計）。\n")
     return "\n".join(lines) + "\n" + note

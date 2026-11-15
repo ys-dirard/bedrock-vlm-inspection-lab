@@ -33,8 +33,17 @@ class BoxParse:
     error: str | None
 
 
-def parse_boxes(raw_text: str | None) -> BoxParse:
-    """応答から枠を読む（CI-L1、L2）。例外は投げない。"""
+TRUNCATED = "truncated: stopReason max_tokens"
+BOTH = "boxes: both NONE and [..] groups"
+
+
+def parse_boxes(raw_text: str | None, stop_reason: str | None = None) -> BoxParse:
+    """応答から枠を読む（CI-L1、L2、L2b）。例外は投げない。
+
+    stop_reason が max_tokens なら、閉じた [...] があっても解析失敗にする（後ろの枠が失われているため）。
+    """
+    if stop_reason == "max_tokens":
+        return BoxParse(None, TRUNCATED)
     if raw_text is None:
         return BoxParse(None, "empty: no text")
     if not raw_text.strip():
@@ -46,7 +55,7 @@ def parse_boxes(raw_text: str | None) -> BoxParse:
             return BoxParse([], None)
         return BoxParse(None, "boxes: no [..] group and no NONE")
     if has_none:
-        return BoxParse(None, "boxes: both NONE and [..] groups")
+        return BoxParse(None, BOTH)
     boxes: list[Box] = []
     for i, g in enumerate(groups):
         parts = [p.strip() for p in g.split(",")]
@@ -59,6 +68,24 @@ def parse_boxes(raw_text: str | None) -> BoxParse:
             return BoxParse(None, f"boxes: group {i} is not x1<x2 and y1<y2: [{g[:40]}]")
         boxes.append((x1, y1, x2, y2))
     return BoxParse(boxes, None)
+
+
+def area_fraction(box: Box) -> float:
+    """0〜1000 の枠が、その領域（画像全体、またはタイル）に占める面積の割合（CI-L14）。"""
+    return (box[2] - box[0]) * (box[3] - box[1]) / (SCALE * SCALE)
+
+
+def error_kind(error: str | None) -> str | None:
+    """解析失敗の理由を、集計で数える種類に分ける。"""
+    if error is None:
+        return None
+    if error == TRUNCATED:
+        return "truncated"
+    if error == BOTH:
+        return "both_none_and_boxes"
+    if error.startswith("empty"):
+        return "empty"
+    return "other"
 
 
 def norm_to_px(box: Box, region: Box) -> Box:
