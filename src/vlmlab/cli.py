@@ -65,6 +65,7 @@ def main(argv: list[str] | None = None) -> None:
     lr.add_argument("--tag", default="localization")
     lr.add_argument("--visa-root", default="data/visa")
     lr.add_argument("--min-box-area", type=int, default=20, help="正解枠にする外接矩形の最小の面積（画素）")
+    lr.add_argument("--no-firstline", action="store_true", help="参考の読み方（L-D9、最初の行だけ）の表を出さない")
 
     cs = sub.add_parser("cascade", help="段階判定：記録から回す条件ごとの指標を計算する（11/26 の記事。API は呼ばない）")
     cs.add_argument("--nova", required=True, help="1段目の Nova の実験（例 runs/n1_B）")
@@ -156,7 +157,8 @@ def main(argv: list[str] | None = None) -> None:
             print(f"{k}: {v}")
     elif a.cmd == "locreport":
         from .locreport import build_loc_report
-        for k, v in build_loc_report(a.run_dirs, a.out, ROOT / a.visa_root, ROOT, a.tag, a.min_box_area).items():
+        for k, v in build_loc_report(a.run_dirs, a.out, ROOT / a.visa_root, ROOT, a.tag, a.min_box_area,
+                                        not a.no_firstline).items():
             print(f"{k}: {v}")
     elif a.cmd == "cascade":
         from .cascade import load_embeddings, run_cascade, write_outputs

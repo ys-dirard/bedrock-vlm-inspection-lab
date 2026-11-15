@@ -70,8 +70,9 @@ class _Truth:
         return self._cache[image_id]
 
 
-def score_images(calls: pd.DataFrame, cfg: dict[str, Any], truth: _Truth) -> pd.DataFrame:
-    """画像×回ごとに予測をまとめて採点する（CI-L9、L12）。"""
+def score_images(calls: pd.DataFrame, cfg: dict[str, Any], truth: _Truth, reader: str = "strict") -> pd.DataFrame:
+    """画像×回ごとに予測をまとめて採点する（CI-L9、L12）。reader は読み方（strict = 主の規則、first_line = L-D9）。"""
+    read = L.READERS[reader]
     tiles = cfg.get("tiles")
     expected = (tiles * tiles) if tiles else 1
     rows = []
@@ -79,7 +80,7 @@ def score_images(calls: pd.DataFrame, cfg: dict[str, Any], truth: _Truth) -> pd.
         g = g.sort_values("tile_key")
         first = g.iloc[0]
         (w, h), mask, gts = truth.get(image_id, first["path"], first["label"])
-        parses = [L.parse_boxes(t, sr) for t, sr in zip(g["raw_text"], g["stop_reason"])]
+        parses = [read(t, sr) for t, sr in zip(g["raw_text"], g["stop_reason"])]
         kinds = [L.error_kind(p.error) for p in parses]
         row: dict[str, Any] = {
             "run_name": first["run_name"], "image_id": image_id, "category": first["category"],
@@ -255,10 +256,13 @@ def jitter_summary(per_image: pd.DataFrame) -> list[dict[str, Any]]:
 
 def build_loc_report(run_dirs: list[str | Path], out_dir: str | Path, visa_root: str | Path,
                      base_dir: str | Path = ".", tag: str = "localization",
-                     min_box_area: int = 20) -> dict[str, Path]:
+                     min_box_area: int = 20, reference_first_line: bool = True) -> dict[str, Path]:
+    """主の規則（strict）で集計する。reference_first_line なら、参考の読み方（L-D9、最初の行だけ）の
+    表を別のファイル（<tag>_summary_firstline.csv・.md、<tag>_per_image_firstline.csv）にも出す。"""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     summary, by_cat, per_img_all, jit_all = [], [], [], []
+    summary_fl, per_img_fl = [], []
     for rd in run_dirs:
         calls, cfg = load_calls(rd)
         split = pd.read_csv(Path(base_dir) / cfg["split"])
@@ -273,6 +277,11 @@ def build_loc_report(run_dirs: list[str | Path], out_dir: str | Path, visa_root:
             by_cat.append({"run_name": name, "category": cat, **aggregate(g)})
         per_img_all.append(img)
         jit_all.append(jitter_table(img))
+        if reference_first_line:
+            img_fl = score_images(calls, cfg, _Truth(Path(visa_root), masks, min_box_area), reader="first_line")
+            summary_fl.append({**summary[-1], "reader": "first_line", **aggregate(img_fl)})
+            per_img_fl.append(img_fl)
+        summary[-1]["reader"] = "strict"
     paths = {
         "summary": out / f"{tag}_summary.csv",
         "summary_md": out / f"{tag}_summary.md",
@@ -289,6 +298,16 @@ def build_loc_report(run_dirs: list[str | Path], out_dir: str | Path, visa_root:
     jpi.to_csv(paths["jitter_per_image"], index=False, lineterminator="\n")
     pd.DataFrame(jitter_summary(jpi)).to_csv(paths["jitter"], index=False, lineterminator="\n")
     paths["summary_md"].write_text(to_markdown(s), encoding="utf-8")
+    if reference_first_line:
+        paths["summary_firstline"] = out / f"{tag}_summary_firstline.csv"
+        paths["summary_firstline_md"] = out / f"{tag}_summary_firstline.md"
+        paths["per_image_firstline"] = out / f"{tag}_per_image_firstline.csv"
+        sf = pd.DataFrame(summary_fl)
+        sf.to_csv(paths["summary_firstline"], index=False, lineterminator="\n")
+        pd.concat(per_img_fl).to_csv(paths["per_image_firstline"], index=False, lineterminator="\n")
+        paths["summary_firstline_md"].write_text(
+            "参考の読み方（L-D9）：本文の最初の行だけを読む。主の規則（L-D5）ではない。"
+            "大きな枠（面積が半分以上）は CI-L14 のとおり分けて出す。\n\n" + to_markdown(sf), encoding="utf-8")
     return paths
 
 

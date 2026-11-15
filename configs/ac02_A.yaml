@@ -5,7 +5,7 @@ n_refs: 0
 model_id: jp.amazon.nova-2-lite-v1:0
 region: ap-northeast-1
 service_tier: standard
-prompt: prompts/loc_v2.txt          # plan.md の案（loc_v1、ユーザーガイドの境界ボックス用テンプレートが基）に「枠か NONE だけ、説明なし」を足した（2026-11-16 決定）
+prompt: prompts/loc_v3.txt          # loc_v1（案）→ v2（説明なし）→ v3（全体の枠・幅0の枠を書かない、形は文章で説明。L-D10、2026-11-16 決定）
 image_long_edge: null               # 原寸（Nova 2 Lite は画像1枚230トークンで課金）
 inference: {temperature: 0, maxTokens: 600}   # ユーザーガイドの物体検出の推奨：temperature 0、推論なし
 repeats: 3

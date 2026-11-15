@@ -70,6 +70,22 @@ def parse_boxes(raw_text: str | None, stop_reason: str | None = None) -> BoxPars
     return BoxParse(boxes, None)
 
 
+def parse_boxes_first_line(raw_text: str | None, stop_reason: str | None = None) -> BoxParse:
+    """参考の読み方（L-D9）：本文の最初の空でない行だけを、CI-L1・L2・L2b の規則で読む。
+
+    主の規則（parse_boxes）ではない。2行目以降（説明や NONE）は読まずに捨てる。
+    """
+    if stop_reason == "max_tokens":
+        return BoxParse(None, TRUNCATED)
+    if raw_text is None:
+        return BoxParse(None, "empty: no text")
+    line = next((ln for ln in raw_text.strip().splitlines() if ln.strip()), "")
+    return parse_boxes(line)
+
+
+READERS = {"strict": parse_boxes, "first_line": parse_boxes_first_line}
+
+
 def area_fraction(box: Box) -> float:
     """0〜1000 の枠が、その領域（画像全体、またはタイル）に占める面積の割合（CI-L14）。"""
     return (box[2] - box[0]) * (box[3] - box[1]) / (SCALE * SCALE)

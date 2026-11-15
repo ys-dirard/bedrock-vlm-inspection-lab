@@ -71,6 +71,20 @@ def test_parse_boxes_truncated_is_failure():
     assert r.pred is None and r.parse_error == L.TRUNCATED
 
 
+def test_parse_boxes_first_line():
+    """CI-L15：参考の読み方は最初の空でない行だけを読む。切れた応答は失敗のまま"""
+    f = L.parse_boxes_first_line
+    assert f("[0, 0, 1000, 1000]\n\n NONE").boxes == [(0, 0, 1000, 1000)]  # 主の規則では失敗
+    assert L.parse_boxes("[0, 0, 1000, 1000]\n\n NONE").boxes is None
+    assert f("\n  NONE\nThe image shows [1, 2, 3, 4]").boxes == []
+    assert f("[10, 20, 30, 40], [50, 60, 70, 80].\nExplanation: [x1, y1, x2, y2]").boxes == [
+        (10, 20, 30, 40), (50, 60, 70, 80)]
+    assert f("[0, 0, 0, 0]\nNONE").boxes is None  # 幅 0 は最初の行でも失敗
+    assert f("The image shows no defect.\nNONE").boxes is None  # 最初の行に枠も NONE も無い
+    assert f("[10, 20, 30, 40]", "max_tokens").error == L.TRUNCATED
+    assert f(None).boxes is None and f("   ").boxes is None
+
+
 def test_error_kind():
     assert L.error_kind(None) is None
     assert L.error_kind(L.parse_boxes("x", "max_tokens").error) == "truncated"
@@ -417,6 +431,32 @@ def test_locreport_large_boxes_and_truncation(loclab):
     assert s["box_area_fraction_mean"] == 1.0 and s["large_box_share_mean"] == 1.0
     assert s["n_calls_truncated_sum"] == 1 and s["n_parse_fail_sum"] == 1
     assert s["false_positive_rate_mean"] == 1.0
+
+
+def test_locreport_firstline_reference_table(loclab):
+    """CI-L15：参考の読み方の表は別のファイルに出る。主の規則で失敗した応答も、最初の行が読めれば有効になる"""
+    base, visa, pricing = loclab
+
+    class FullThenNone(BoxModel):
+        def invoke(self, req):
+            r = super().invoke(req)
+            if r.raw_text == "NONE":  # 良品：画像全体の枠を書いてから NONE と答える
+                r.raw_text = "[0, 0, 1000, 1000]\n\nNONE"
+            return r
+
+    plan = plan_run(RunConfig.load(base / "A.yaml"), base, base / "runs")
+    execute(plan, FullThenNone(), pricing, visa, base, log=lambda _: None)
+    paths = build_loc_report([base / "runs" / "A"], base / "out", visa, base)
+    strict = pd.read_csv(paths["summary"]).iloc[0]
+    fl = pd.read_csv(paths["summary_firstline"]).iloc[0]
+    assert strict["reader"] == "strict" and fl["reader"] == "first_line"
+    assert strict["n_normal_valid_sum"] == 0 and strict["n_calls_both_none_and_boxes_sum"] == 4
+    assert fl["n_normal_valid_sum"] == 4 and fl["false_positive_rate_mean"] == 1.0
+    assert fl["large_box_share_mean"] == pytest.approx(0.5)  # 良品の全体の枠4つと、不良の小さな枠4つ
+    assert fl["hit_rate_mean"] == 1.0 and fl["hit_rate_excl_large_mean"] == 1.0
+    assert "L-D9" in paths["summary_firstline_md"].read_text(encoding="utf-8")
+    p2 = build_loc_report([base / "runs" / "A"], base / "out2", visa, base, reference_first_line=False)
+    assert "summary_firstline" not in p2
 
 
 def test_locreport_rejects_mask_size_mismatch(loclab):
