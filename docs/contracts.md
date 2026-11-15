@@ -38,6 +38,8 @@
 | CI-M8 | post | 一致率 = 全回で同じ判定だった画像 / 2回以上判定した画像。どこかの回が解析失敗なら一致としない |
 | CI-M9 | post | レイテンシの p50・p95 は、解析失敗も含む全呼び出しから線形補間で出す（呼び出し自体は行われたため） |
 | CI-M10 | post | 1件あたりの費用は全呼び出しの平均、1,000枚あたりはその1,000倍。費用が None の行があれば None |
+| CI-M11 | post | キャッシュの集計：cacheRead・cacheWrite のトークン数の平均と、0 より大きかった呼び出しの数。送った入力の合計の平均（total_input_tokens_mean）は inputTokens + cacheRead + cacheWrite（Converse の inputTokens はキャッシュに読み書きした分を含まない） |
+| CI-M12 | post | 判定の変化（基準の条件 → 比べる条件）：画像ごとに、各条件の全回が有効で同じ判定ならそれを「その条件の判定」とし、割れた・解析失敗があれば None。両方あって違えば「OK→NG」「NG→OK」、同じなら same、どちらかが None なら unstable。変わった画像は、正解（normal=OK、anomaly=NG）になったら fixed、正解でなくなったら broken。画像の集合か正解が条件の間で違えば止める |
 
 ## cost.py（費用）
 
@@ -58,6 +60,9 @@
 | CI-R2 | pre | 品目ごとの差し替え（prompt_vars）が足りない品目があれば、最初の呼び出しの前に止める |
 | CI-R3 | post | (image_id, repeat) ごとに、成功した記録は1つだけ使う（複数あれば最後のもの）。API のエラーで終わった記録は指標に入れず、件数を n_api_error に出す |
 | CI-B2 | post | `layout: refs_first` は [見本…, 検査対象, 指示]、`layout: target_first` は [検査対象, 指示, ref_note, 見本…] の順で、1通の user メッセージにする。ref_note は target_first のときだけ使える。topP は設定したときだけ送る |
+| CI-B3 | post | `layout: labeled`（12/3 の記事）は [見本の説明1, 見本1, …, 指示, (cachePoint), 検査対象の説明, 検査対象] の順で、1通の user メッセージにする。見本の説明（ref_labels）は見本と同じ数、検査対象の説明（target_label）は必須。`cache_point` のときだけ指示の直後に `{"cachePoint": {"type": "default"}}` を置き、`ttl` は書かない（Nova は5分だけ。書くと ValidationException になりうる）。cachePoint の有無のほかは同じ並びになる。ref_labels・target_label・cache_point は labeled 以外では使えない |
+| CI-R4 | pre | 不良品の見本（`defect_refs`）は品目ごとに ref_rank の順で `n_defect_refs` 枚を使い、良品の見本のあとに並べる。説明は `labels.defect` の `{{n}}`（1から）と `{{note}}` を差し替えたもの。見本が足りない品目がある、または見本が検査対象の画像と重なるときは、呼ぶ前に止める。`n_defect_refs`・`labels`・`cache_point` は `layout: labeled` のときだけ使え、labeled では labels に good・defect・target がそろっていなければ止める |
+| CI-R5 | pre | `layout: labeled` のとき、CI-R1 の設定に、不良品の見本の枚数・選んだ見本（画像 ID・パス・説明）のハッシュ・説明の文・cachePoint の有無を足す。どれかが前の記録と違えば、呼ぶ前に止める。labeled 以外の実験の記録のキーは変えない |
 | CI-B1 | post | スロットリングなどの再試行できるエラーと、タイムアウト・接続の失敗は、指数バックオフで max_attempts まで試す。それでも失敗したら例外を投げずに api_error を返す。再試行できないエラーはすぐ api_error を返す |
 
 ## embed.py・embed_run.py（条件 E：埋め込み＋k近傍法）
@@ -69,6 +74,7 @@
 | CI-E3 | post | 品目ごとに、学習用の埋め込みでコサイン距離の k 近傍（k は正の奇数）の多数決をとる。不良品の割合 p > 0.5 なら NG。confidence は NG なら p、OK なら 1 − p（業務指標のスコアが p になる） |
 | CI-E4 | pre | 再開のとき、埋め込みの中身を決める設定（モデル ID、embeddingPurpose、次元、縮小）が前の記録と違えば、呼ぶ前に止める。k は後から変えてよい |
 | CI-E5 | pre | 学習用とテスト用の画像 ID が1つでも重なれば、呼ぶ前に止める |
+| CI-D2 | post | 不良品の見本（visa_defect_refs.csv、12/3 の記事）：pcb1 と capsules の各品目で、test の不良品のうち評価用（visa_test_200・visa_wide_120）に入っていないものを候補にする。欠陥の種類（各品目の image_anno.csv の label の文字列。「bubble,discolor」などの組み合わせは1つの種類とみなす）ごとに候補を数え、多い順（同数なら名前の順）に3種類を選び、種類ごとに1枚を random_state=42 で選ぶ（候補は image_id の順に並べてから選ぶので、入力の並びによらない）。ref_rank は種類の順。note は種類の日本語訳（`DEFECT_TYPE_JA`、組み合わせは「・」でつなぐ）。知らない種類があれば止める。評価用と重なれば止める |
 | CI-D1 | post | 学習用の分割（visa_knn_train.csv）は、良品を各品目の train から、不良品を test のうち評価用（visa_test_200・visa_wide_120）に入っていないものから選ぶ（random_state=42）。VisA の 1cls.csv の train に不良品が無いため |
 
 ## cascade.py（11/26 の記事：迷った画像だけ上位モデルに回す段階判定。API は呼ばない）
@@ -96,7 +102,7 @@
 
 ## 前提（assumption）
 
-- Bedrock の usage の inputTokens には、キャッシュから読んだトークンは含まれない。キャッシュを使う記事で確かめる
+- ~~Bedrock の usage の inputTokens には、キャッシュから読んだトークンは含まれない。キャッシュを使う記事で確かめる~~ → ドキュメントで確認（2026-11-16）：「When prompt caching is enabled, the `inputTokens` field represents only the non-cached input tokens … total input tokens = inputTokens + cacheReadInputTokens + cacheWriteInputTokens」（https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html ）。CI-C1 の費用の式はこの前提に合っている。実測は 12/3 の記事の試運転で確かめる
 
 ## mmad（11/19 の記事：MMAD の選択式の問題）
 

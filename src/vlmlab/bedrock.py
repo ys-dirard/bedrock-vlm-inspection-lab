@@ -21,7 +21,9 @@ SERVICE_TIERS = {"standard": "default", "flex": "flex", "priority": "priority"}
 # - target_first: [検査対象, 指示, ref_note, 見本…]（AWS サンプル sample-generative-visual-inspection の並び。
 #   サンプルは InvokeModel で見本を2通目の user メッセージとして渡すが、この基盤は Converse で
 #   1通の user メッセージを送る作りなので、同じ順のまま1通にまとめる。2通に分けたときの挙動は確かめていない）
-LAYOUTS = ("refs_first", "target_first")
+# - labeled:      [見本の説明1, 見本1, …, 指示, (cachePoint), 検査対象の説明, 検査対象]（12/3 の記事。
+#   見本ごとに説明の文を前に置く。cachePoint を置くと、見本と指示までが共通の前置きになる）
+LAYOUTS = ("refs_first", "target_first", "labeled")
 
 RETRYABLE = {
     "ThrottlingException",
@@ -45,6 +47,9 @@ class ModelRequest:
     ref_note: str | None = None  # target_first のとき、見本の前に置く文
     service_tier: str = "standard"
     additional_fields: dict[str, Any] | None = None
+    ref_labels: tuple[str, ...] | None = None  # labeled のとき、見本ごとの説明（見本と同じ数）
+    target_label: str | None = None  # labeled のとき、検査対象の前に置く文
+    cache_point: bool = False  # labeled のとき、指示の後ろに cachePoint を置く（ttl は書かない）
 
 
 @dataclass
@@ -71,6 +76,26 @@ def _image_block(img: EncodedImage) -> dict[str, Any]:
 
 
 def build_content(req: ModelRequest) -> list[dict[str, Any]]:
+    if req.layout != "labeled" and (req.ref_labels is not None or req.target_label or req.cache_point):
+        raise ValueError("ref_labels, target_label and cache_point are only used with layout 'labeled'")
+    if req.layout == "labeled":
+        if not req.images:
+            raise ValueError("layout 'labeled' requires the target image")
+        *refs, target = req.images
+        labels = tuple(req.ref_labels or ())
+        if len(labels) != len(refs):
+            raise ValueError(f"ref_labels ({len(labels)}) must match the number of reference images ({len(refs)})")
+        if not req.target_label:
+            raise ValueError("layout 'labeled' requires target_label")
+        content: list[dict[str, Any]] = []
+        for label, img in zip(labels, refs):
+            content += [{"text": label}, _image_block(img)]
+        content.append({"text": req.text})
+        if req.cache_point:
+            # Nova の TTL は5分だけなので ttl は書かない（書くと ValidationException になりうる）
+            content.append({"cachePoint": {"type": "default"}})
+        content += [{"text": req.target_label}, _image_block(target)]
+        return content
     if req.layout == "refs_first":
         if req.ref_note:
             raise ValueError("ref_note is only used with layout 'target_first'")

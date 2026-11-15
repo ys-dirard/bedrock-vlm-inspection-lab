@@ -180,3 +180,88 @@ def token_stats(df: pd.DataFrame) -> dict[str, Any]:
             s = df[k].dropna()
             out[f"{k}_mean"] = float(s.mean()) if len(s) else None
     return out
+
+
+def cache_stats(df: pd.DataFrame) -> dict[str, Any]:
+    """キャッシュの読み書き（CI-M11）。平均と、0 より大きかった呼び出しの数。
+
+    Converse の inputTokens はキャッシュに読み書きしたトークンを含まないので、送った入力の合計は
+    inputTokens + cacheReadInputTokens + cacheWriteInputTokens（total_input_tokens_mean）。
+    """
+    n = len(df)
+    out: dict[str, Any] = {"n_calls": n}
+    for k in ("cache_read_tokens", "cache_write_tokens"):
+        s = df[k].fillna(0).astype(float) if k in df else pd.Series([0.0] * n)
+        out[f"{k}_mean"] = float(s.mean()) if n else None
+        out[f"n_{k}_positive"] = int((s > 0).sum())
+    if n:
+        total = df["input_tokens"].fillna(0).astype(float)
+        for k in ("cache_read_tokens", "cache_write_tokens"):
+            if k in df:
+                total = total + df[k].fillna(0).astype(float)
+        out["total_input_tokens_mean"] = float(total.mean())
+    else:
+        out["total_input_tokens_mean"] = None
+    return out
+
+
+def _image_verdict(preds: list[Any]) -> str | None:
+    """1枚の画像の回ごとの判定から、全回が有効で同じならその判定、そうでなければ None（割れた・解析失敗）。"""
+    if not preds or any(_is_missing(p) for p in preds) or len(set(preds)) != 1:
+        return None
+    return preds[0]
+
+
+def changed_judgements(base: pd.DataFrame, other: pd.DataFrame) -> pd.DataFrame:
+    """基準の条件（C0）から判定が変わった画像（CI-M12）。
+
+    - 画像ごとに、各条件の全回が有効で同じ判定ならその判定を「その条件の判定」とする。割れた・解析失敗があれば None
+    - change: 両方の判定があり違えば「OK→NG」「NG→OK」、同じなら「same」、どちらかが None なら「unstable」
+    - effect: 変わった画像について、正解（normal=OK、anomaly=NG）に近づいたら fixed、離れたら broken
+    - 両方の条件にある画像だけを比べる。片方にしかない画像があれば止める（黙って除かない）
+    """
+    validate(base)
+    validate(other)
+    b_ids, o_ids = set(base["image_id"]), set(other["image_id"])
+    if b_ids != o_ids:
+        raise ValueError(f"image sets differ: only in base {len(b_ids - o_ids)}, only in other {len(o_ids - b_ids)}")
+    rows = []
+    o_groups = dict(tuple(other.groupby("image_id")))
+    for image_id, g in base.groupby("image_id", sort=True):
+        h = o_groups[image_id]
+        label = g["label"].iloc[0]
+        if h["label"].iloc[0] != label:
+            raise ValueError(f"label differs for {image_id}")
+        bp = g.sort_values("repeat")["pred"].tolist()
+        op = h.sort_values("repeat")["pred"].tolist()
+        bv, ov = _image_verdict(bp), _image_verdict(op)
+        truth = "NG" if label == "anomaly" else "OK"
+        if bv is None or ov is None:
+            change, effect = "unstable", None
+        elif bv == ov:
+            change, effect = "same", None
+        else:
+            change = f"{bv}→{ov}"
+            effect = "fixed" if ov == truth else "broken"
+        rows.append({
+            "image_id": image_id, "category": g["category"].iloc[0], "label": label,
+            "base_preds": ";".join("NA" if _is_missing(p) else p for p in bp),
+            "other_preds": ";".join("NA" if _is_missing(p) else p for p in op),
+            "base_verdict": bv, "other_verdict": ov, "change": change, "effect": effect,
+        })
+    return pd.DataFrame(rows)
+
+
+def change_counts(changes: pd.DataFrame) -> dict[str, int]:
+    """changed_judgements の件数（CI-M12）。"""
+    c = changes["change"].value_counts()
+    e = changes["effect"].value_counts()
+    return {
+        "n_images": int(len(changes)),
+        "n_same": int(c.get("same", 0)),
+        "n_ok_to_ng": int(c.get("OK→NG", 0)),
+        "n_ng_to_ok": int(c.get("NG→OK", 0)),
+        "n_unstable": int(c.get("unstable", 0)),
+        "n_fixed": int(e.get("fixed", 0)),
+        "n_broken": int(e.get("broken", 0)),
+    }

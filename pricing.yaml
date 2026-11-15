@@ -2,6 +2,11 @@
 # 確かめられなかった単価は null のままにする。入力か出力の単価が null のモデルは `vlmlab run` が実行を断る。
 # 料金ページ: https://aws.amazon.com/bedrock/pricing/
 #
+# 2026-11-16 の再確認（12/3 の記事）
+#   - Nova 2 Lite（jp. と global.）の入力・出力・キャッシュ読み・キャッシュ書きの単価は 11-05 と同じ。
+#     価格表の版 20261111013037（publicationDate 2026-11-11T01:30:37Z）、effectiveDate 2026-11-01
+#   - 料金ページの Nova の表は、今回も自動では読み出せなかった（照合は未）
+#
 # 2026-11-05 の確認
 #   - 単価は AWS Price List API（aws-pricing MCP、service_code=AmazonBedrock）から取った。
 #     価格表の publicationDate 2026-11-02T16:50:15Z、effectiveDate 2026-10-01。API は 1K トークンあたりで返すので、1,000 倍して書いた
@@ -17,10 +22,10 @@ models:
     output_per_mtok: 3.311                     # APN1-Nova2.0Lite-output-tokens
     cache_read_per_mtok: 0.099                 # APN1-Nova2.0Lite-cache-read-input-token-count
     cache_write_per_mtok: 0.0                  # APN1-Nova2.0Lite-cache-write-input-token-count
-    source_url: "AWS Price List API (AmazonBedrock, ap-northeast-1, publicationDate 2026-11-02)"
-    checked_on: "2026-11-05"
+    source_url: "AWS Price List API (AmazonBedrock, ap-northeast-1, publicationDate 2026-11-11)"
+    checked_on: "2026-11-16"
     model_id_source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html
-    model_id_checked_on: "2026-11-05"
+    model_id_checked_on: "2026-11-16"
     note: 画像は解像度によらず1枚230トークンで課金（https://docs.aws.amazon.com/nova/latest/nova2-userguide/using-multimodal-models.html、2026-11-05 確認）。料金ページとの照合は未
 
   - model_id: global.amazon.nova-2-lite-v1:0   # Global（東京から呼んだときの単価）

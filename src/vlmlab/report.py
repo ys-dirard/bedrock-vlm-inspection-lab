@@ -50,6 +50,7 @@ def summarize(df: pd.DataFrame) -> dict[str, Any]:
         **M.latency_stats(df),
         **M.cost_stats(df),
         **M.token_stats(df),
+        **{k: v for k, v in M.cache_stats(df).items() if k != "n_calls"},
     }
     return out
 
@@ -83,7 +84,7 @@ def misclassified(df: pd.DataFrame) -> pd.DataFrame:
 def build_report(run_dirs: list[str | Path], out_dir: str | Path, tag: str = "summary") -> dict[str, Path]:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    summary_rows, cat_rows, biz_rows, wrong = [], [], [], []
+    summary_rows, cat_rows, biz_rows, wrong, cache_rows = [], [], [], [], []
     for rd in run_dirs:
         df = load_run(rd)
         name = df["run_name"].iloc[0]
@@ -92,6 +93,9 @@ def build_report(run_dirs: list[str | Path], out_dir: str | Path, tag: str = "su
         for cat, g in df.groupby("category", sort=True):
             cat_rows.append({"run_name": name, "category": cat, **M.aggregate_repeats(M.per_repeat(g))})
         biz_rows += [{"run_name": name, **r} for r in business(df)]
+        cache_rows.append({"run_name": name, "category": "all", **M.cache_stats(df)})
+        cache_rows += [{"run_name": name, "category": cat, **M.cache_stats(g)}
+                       for cat, g in df.groupby("category", sort=True)]
         wrong.append(misclassified(df))
 
     paths = {
@@ -100,13 +104,37 @@ def build_report(run_dirs: list[str | Path], out_dir: str | Path, tag: str = "su
         "by_category": out / f"{tag}_by_category.csv",
         "business_metric": out / f"{tag}_business_metric.csv",
         "misclassified": out / f"{tag}_misclassified.csv",
+        "cache_usage": out / f"{tag}_cache_usage.csv",
     }
     summary = pd.DataFrame(summary_rows)
     summary.to_csv(paths["summary"], index=False, lineterminator="\n")
     pd.DataFrame(cat_rows).to_csv(paths["by_category"], index=False, lineterminator="\n")
     pd.DataFrame(biz_rows).to_csv(paths["business_metric"], index=False, lineterminator="\n")
     pd.concat(wrong).to_csv(paths["misclassified"], index=False, lineterminator="\n")
+    pd.DataFrame(cache_rows).to_csv(paths["cache_usage"], index=False, lineterminator="\n")
     paths["summary_md"].write_text(to_markdown(summary), encoding="utf-8")
+    return paths
+
+
+def build_changes(base_dir: str | Path, other_dirs: list[str | Path], out_dir: str | Path,
+                  tag: str = "changed_judgements") -> dict[str, Path]:
+    """基準の条件から判定が変わった画像の一覧と件数（CI-M12）。API は呼ばない。"""
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    base = load_run(base_dir)
+    base_name = base["run_name"].iloc[0]
+    rows, counts = [], []
+    for od in other_dirs:
+        other = load_run(od)
+        name = other["run_name"].iloc[0]
+        ch = M.changed_judgements(base, other)
+        counts.append({"base": base_name, "other": name, "category": "all", **M.change_counts(ch)})
+        for cat, g in ch.groupby("category", sort=True):
+            counts.append({"base": base_name, "other": name, "category": cat, **M.change_counts(g)})
+        rows.append(ch.assign(base=base_name, other=name))
+    paths = {"changes": out / f"{tag}.csv", "counts": out / f"{tag}_counts.csv"}
+    pd.concat(rows).to_csv(paths["changes"], index=False, lineterminator="\n")
+    pd.DataFrame(counts).to_csv(paths["counts"], index=False, lineterminator="\n")
     return paths
 
 
@@ -135,6 +163,8 @@ def to_markdown(summary: pd.DataFrame) -> str:
         ("latency_p95_s", "p95 (秒)", 2),
         ("input_tokens_mean", "入力トークン", 0),
         ("output_tokens_mean", "出力トークン", 0),
+        ("cache_read_tokens_mean", "キャッシュ読み", 0),
+        ("cache_write_tokens_mean", "キャッシュ書き", 0),
         ("cost_per_1000_usd", "1,000枚あたり (USD)", 3),
     ]
     head = "| " + " | ".join(c[1] for c in cols) + " |"

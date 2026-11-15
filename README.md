@@ -157,6 +157,22 @@ uv run vlmlab cascade --nova runs/n1_B --claude runs/n3_claude_refB     --embedd
 - `cascade_rules.csv`・`.md`（条件ごとの表）、`fixed_and_broken.csv`、`cascade_images.csv`、`confidence_bands.csv`、`business_metric.csv`、`e_thresholds.csv` を出します
 - Claude は説明のあとに ```` ```json ```` の囲みで JSON を付けるので、設定で `parse.allow_trailing_code_fence: true` にしています（CI-P7）
 
+## 不良品の見本とプロンプトキャッシュ（12/3 の記事）
+
+良品の見本1枚に、不良品の見本を0・1・3枚足して判定を比べます（C0・C1・C3）。C3cache は C3 と同じ内容に `cachePoint` を足したものです。
+
+```bash
+uv run vlmlab run configs/ac03_C3cache.yaml --dry-run --limit 10   # 並べ方（content_outline）を確かめる
+uv run vlmlab run configs/ac03_C3cache.yaml --limit 10             # 試運転
+uv run vlmlab report runs/ac03_C0 runs/ac03_C1 runs/ac03_C3 runs/ac03_C3cache --out results --tag fewshot_summary
+uv run vlmlab compare --base runs/ac03_C0 runs/ac03_C1 runs/ac03_C3 --out results   # C0 から判定が変わった画像
+```
+
+- 不良品の見本は `data/splits/visa_defect_refs.csv`（各品目3枚。評価用の画像と重ならない不良品から、欠陥の種類が違うものを random_state=42 で選ぶ。選び方は [docs/contracts.md](docs/contracts.md) の CI-D2）。説明（note）は VisA の注記の欠陥の種類を日本語にしたものです
+- `layout: labeled` は「良品の見本:」「不良品の見本1（傷）:」のような説明を見本ごとに前に置き、[見本…, 指示, (cachePoint), 検査対象:, 検査対象] の順に並べます（CI-B3）
+- Nova 2 Lite で1リクエストに埋め込める画像は5枚までなので、良品1枚・不良品3枚・検査対象1枚が上限です
+- 集計の `*_cache_usage.csv` に、cacheRead・cacheWrite の平均と0より大きかった件数を出します。Converse の inputTokens はキャッシュに読み書きした分を含まないので、送った入力の合計は3つの和です（CI-M11）
+
 ## MMAD の選択式の問題（11/19 の記事）
 
 [MMAD](https://github.com/jam-cc/MMAD)（ICLR 2025）の選択式の問題を、Bedrock の VLM に解かせて正答率を出します。プロンプト・画像の縮小・回答の読み取り・集計は、公式の評価スクリプト（commit `49db95b` の `evaluation/examples/GPT4/gpt4o.py` と `helper/summary.py`）に合わせています。違うところ（temperature 0、maxTokens 1,024 など）は記事に書いています。

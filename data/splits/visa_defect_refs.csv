@@ -1,0 +1,7 @@
+image_id,ref_rank,category,label,split,path,defect_type,note
+pcb1/anomaly/017,1,pcb1,anomaly,test,pcb1/Data/Images/Anomaly/017.JPG,melt,溶け
+pcb1/anomaly/052,2,pcb1,anomaly,test,pcb1/Data/Images/Anomaly/052.JPG,missing,部品の欠落
+pcb1/anomaly/087,3,pcb1,anomaly,test,pcb1/Data/Images/Anomaly/087.JPG,scratch,傷
+capsules/anomaly/074,1,capsules,anomaly,test,capsules/Data/Images/Anomaly/074.JPG,"bubble,discolor,scratch,leak,misshape",気泡・変色・傷・漏れ・変形
+capsules/anomaly/024,2,capsules,anomaly,test,capsules/Data/Images/Anomaly/024.JPG,bubble,気泡
+capsules/anomaly/098,3,capsules,anomaly,test,capsules/Data/Images/Anomaly/098.JPG,"bubble,discolor,scratch",気泡・変色・傷

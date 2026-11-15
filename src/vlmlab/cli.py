@@ -5,6 +5,7 @@
   vlmlab run CONFIG [--limit N] [--dry-run]
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
+  vlmlab compare --base RUN_DIR RUN_DIR... --out DIR [--tag NAME]   基準の条件から判定が変わった画像（12/3 の記事）
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
 
   MMAD（11/19 の記事）
@@ -57,6 +58,12 @@ def main(argv: list[str] | None = None) -> None:
     rp.add_argument("run_dirs", nargs="+")
     rp.add_argument("--out", required=True)
     rp.add_argument("--tag", default="summary")
+
+    cp = sub.add_parser("compare", help="基準の条件から判定が変わった画像を数える（API は呼ばない）")
+    cp.add_argument("--base", required=True, help="基準の実験（例 runs/ac03_C0）")
+    cp.add_argument("run_dirs", nargs="+")
+    cp.add_argument("--out", required=True)
+    cp.add_argument("--tag", default="changed_judgements")
 
     cs = sub.add_parser("cascade", help="段階判定：記録から回す条件ごとの指標を計算する（11/26 の記事。API は呼ばない）")
     cs.add_argument("--nova", required=True, help="1段目の Nova の実験（例 runs/n1_B）")
@@ -121,6 +128,8 @@ def main(argv: list[str] | None = None) -> None:
                 "calls": len(plan.items) * cfg.repeats, "refs_per_image": cfg.n_refs,
                 "price_known": price.runnable, "out_dir": str(plan.out_dir),
                 "by_group": plan.items.groupby(["category", "label"]).size().to_dict().__repr__(),
+                "defect_refs_per_image": cfg.n_defect_refs, "cache_point": cfg.cache_point,
+                "content_outline": _outline(cfg, plan),
             }, ensure_ascii=False, indent=2))
             return
         from .bedrock import BedrockConverse
@@ -144,6 +153,10 @@ def main(argv: list[str] | None = None) -> None:
         from .report import build_report
         for k, v in build_report(a.run_dirs, a.out, a.tag).items():
             print(f"{k}: {v}")
+    elif a.cmd == "compare":
+        from .report import build_changes
+        for k, v in build_changes(a.base, a.run_dirs, a.out, a.tag).items():
+            print(f"{k}: {v}")
     elif a.cmd == "cascade":
         from .cascade import load_embeddings, run_cascade, write_outputs
         from .report import load_run
@@ -151,6 +164,31 @@ def main(argv: list[str] | None = None) -> None:
         for k, v in write_outputs(res, a.out).items():
             print(f"{k}: {v}")
         print(f"best: {res['best']}")
+
+
+def _outline(cfg, plan) -> dict[str, list[str]]:
+    """--dry-run 用：品目ごとに、1件目の user メッセージの並び（画像はパス、文はそのまま）。"""
+    from .bedrock import ModelRequest, build_content
+    from .data import EncodedImage
+    from .run import fill_template, read_prompts, ref_labels
+
+    prompt_text, _ = read_prompts(cfg, ROOT)
+    out = {}
+    for cat, g in plan.items.groupby("category", sort=False):
+        row = g.iloc[0]
+        goods = plan.refs_by_cat.get(cat, [])
+        defects = plan.defect_refs_by_cat.get(cat, [])
+        paths = goods + [d["path"] for d in defects] + [row.path]
+        fake = [EncodedImage(p.encode("utf-8"), "jpeg", 0, 0) for p in paths]
+        req = ModelRequest(model_id=cfg.model_id, images=fake,
+                           text=fill_template(prompt_text, cfg.prompt_vars.get(cat, {})), layout=cfg.layout,
+                           ref_note=cfg.ref_note, ref_labels=ref_labels(cfg, len(goods), defects),
+                           target_label=cfg.labels["target"] if cfg.layout == "labeled" else None,
+                           cache_point=cfg.cache_point)
+        out[cat] = [f"image: {b['image']['source']['bytes'].decode('utf-8')}" if "image" in b
+                    else "cachePoint" if "cachePoint" in b else f"text: {b['text']}"
+                    for b in build_content(req)]
+    return out
 
 
 def _mmad(a: argparse.Namespace) -> None:

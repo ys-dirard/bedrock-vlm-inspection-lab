@@ -1,0 +1,25 @@
+# 12/3 の記事：不良品の見本0枚（良品の見本1枚＋検査対象）
+# C0・C1・C3・C3cache は、指示の文・説明の文・良品の見本・画像の扱い・推論の設定をそろえ、
+# 不良品の見本の枚数（と C3cache の cachePoint）だけを変える
+name: ac03_C0
+split: data/splits/visa_test_200.csv
+refs: data/splits/visa_refs.csv
+n_refs: 1
+defect_refs: data/splits/visa_defect_refs.csv
+n_defect_refs: 0
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v2_fewshot.txt
+layout: labeled
+labels:
+  good: "良品の見本:"
+  defect: "不良品の見本{{n}}（{{note}}）:"
+  target: "検査対象:"
+cache_point: false
+image_long_edge: null               # 原寸（11/11 の条件 B と同じ。Nova 2 Lite は画像1枚230トークンで課金）
+inference: {temperature: 0, maxTokens: 300}   # 11/11 の条件 B と同じ
+repeats: 2
+budget_usd: 0.5
+parse:
+  allow_code_fence: true            # 11/11 の条件 B と同じ（本文全体を包む ```json の囲みだけ外す）

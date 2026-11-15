@@ -46,6 +46,11 @@ class RunConfig:
     additional_fields: dict[str, Any] | None = None
     repeats: int = 1
     parse: dict[str, Any] = field(default_factory=dict)
+    # 12/3 の記事：不良品の見本と、見本ごとの説明（layout=labeled）
+    defect_refs: str | None = None  # 不良品の見本の一覧（visa_defect_refs.csv。note 列が説明）
+    n_defect_refs: int = 0
+    labels: dict[str, str] | None = None  # good / defect / target。defect には {{n}}（何枚目）と {{note}} を書ける
+    cache_point: bool = False  # 見本と指示の後ろに cachePoint を置く
 
     @classmethod
     def load(cls, path: str | Path) -> "RunConfig":
@@ -62,6 +67,13 @@ class RunConfig:
             raise ValueError(f"layout must be one of {LAYOUTS}")
         if cfg.ref_note and cfg.layout != "target_first":
             raise ValueError("ref_note is only used with layout 'target_first'")
+        if cfg.n_defect_refs < 0 or (cfg.n_defect_refs > 0 and not cfg.defect_refs):
+            raise ValueError("n_defect_refs > 0 requires defect_refs")
+        if cfg.layout == "labeled":
+            if set(cfg.labels or {}) != {"good", "defect", "target"}:
+                raise ValueError("layout 'labeled' requires labels with exactly the keys good, defect, target")
+        elif cfg.n_defect_refs or cfg.labels or cfg.cache_point:
+            raise ValueError("n_defect_refs, labels and cache_point are only used with layout 'labeled'")
         unknown_inf = set(cfg.inference) - {"temperature", "maxTokens", "topP"}
         if unknown_inf:
             raise ValueError(f"unknown inference keys: {sorted(unknown_inf)} (topK などは additional_fields に書く)")
@@ -103,6 +115,32 @@ class RunPlan:
     out_dir: Path
     items: pd.DataFrame
     refs_by_cat: dict[str, list[str]]
+    defect_refs_by_cat: dict[str, list[dict[str, str]]] = field(default_factory=dict)  # [{image_id, path, note}]
+
+
+def load_defect_refs(cfg: RunConfig, base_dir: Path, items: pd.DataFrame) -> dict[str, list[dict[str, str]]]:
+    """不良品の見本を品目ごとに ref_rank の順で n_defect_refs 枚。足りない、または検査対象と重なれば止める（CI-R4）。"""
+    if cfg.n_defect_refs == 0:
+        return {}
+    d = pd.read_csv(base_dir / cfg.defect_refs).sort_values(["category", "ref_rank"])
+    d = d[d.ref_rank <= cfg.n_defect_refs]
+    overlap = set(d.image_id) & set(items.image_id)
+    if overlap:
+        raise ValueError(f"defect refs overlap with test images: {sorted(overlap)}")
+    out = {cat: g[["image_id", "path", "note"]].to_dict("records") for cat, g in d.groupby("category")}
+    lacking = [c for c in items.category.unique() if len(out.get(c, [])) < cfg.n_defect_refs]
+    if lacking:
+        raise ValueError(f"not enough defect refs for categories {lacking}")
+    return out
+
+
+def ref_labels(cfg: RunConfig, n_good: int, defects: list[dict[str, str]]) -> tuple[str, ...] | None:
+    """layout=labeled のときの見本ごとの説明。良品はすべて labels.good、不良品は labels.defect に番号と説明を入れる。"""
+    if cfg.layout != "labeled":
+        return None
+    good = [fill_template(cfg.labels["good"], {}) for _ in range(n_good)]
+    bad = [fill_template(cfg.labels["defect"], {"n": str(i), "note": d["note"]}) for i, d in enumerate(defects, 1)]
+    return tuple(good + bad)
 
 
 def plan_run(cfg: RunConfig, base_dir: Path, runs_dir: Path, limit: int | None = None) -> RunPlan:
@@ -121,8 +159,9 @@ def plan_run(cfg: RunConfig, base_dir: Path, runs_dir: Path, limit: int | None =
     for cat in items.category.unique():
         for text in filter(None, [prompt_text, system_text]):
             fill_template(text, cfg.prompt_vars.get(cat, {}))
+    defect_refs_by_cat = load_defect_refs(cfg, base_dir, items)
     run_name = cfg.name if limit is None else f"{cfg.name}__trial{limit}"
-    return RunPlan(cfg, run_name, runs_dir / run_name, items, refs_by_cat)
+    return RunPlan(cfg, run_name, runs_dir / run_name, items, refs_by_cat, defect_refs_by_cat)
 
 
 def execute(
@@ -142,7 +181,7 @@ def execute(
     jsonl = plan.out_dir / "calls.jsonl"
     previous = load_jsonl(jsonl)
     prompt_text, system_text = read_prompts(cfg, base_dir)
-    identity = call_identity(cfg, prompt_text, system_text)
+    identity = call_identity(cfg, prompt_text, system_text, plan.defect_refs_by_cat)
     check_resume_identity(previous, identity)
     done = {(r["image_id"], r["repeat"]) for r in previous if r.get("api_error") is None}
     guard = BudgetGuard.resume(cfg.budget_usd, [r.get("cost_usd") for r in previous])  # CI-C6
@@ -173,9 +212,11 @@ def execute(
                     stopped = str(e)
                     break
                 vars_ = cfg.prompt_vars.get(row.category, {})
+                goods = plan.refs_by_cat.get(row.category, [])
+                defects = plan.defect_refs_by_cat.get(row.category, [])
                 req = ModelRequest(
                     model_id=cfg.model_id,
-                    images=[img(p) for p in plan.refs_by_cat.get(row.category, [])] + [img(row.path)],
+                    images=[img(p) for p in goods] + [img(d["path"]) for d in defects] + [img(row.path)],
                     text=fill_template(prompt_text, vars_),
                     system=fill_template(system_text, vars_) if system_text else None,
                     temperature=cfg.inference.get("temperature", 0),
@@ -185,6 +226,9 @@ def execute(
                     ref_note=cfg.ref_note,
                     service_tier=cfg.service_tier,
                     additional_fields=cfg.additional_fields,
+                    ref_labels=ref_labels(cfg, len(goods), defects),
+                    target_label=cfg.labels["target"] if cfg.layout == "labeled" else None,
+                    cache_point=cfg.cache_point,
                 )
                 called_at = datetime.now(JST).isoformat(timespec="seconds")
                 resp = model.invoke(req)
@@ -210,12 +254,17 @@ def read_prompts(cfg: RunConfig, base_dir: Path) -> tuple[str, str | None]:
     return prompt_text, system_text
 
 
-def call_identity(cfg: RunConfig, prompt_text: str, system_text: str | None) -> dict[str, Any]:
-    """呼び出しの中身を決める設定。再開のとき、これが前の記録と同じでなければ止める。"""
+def call_identity(cfg: RunConfig, prompt_text: str, system_text: str | None,
+                  defect_refs_by_cat: dict[str, list[dict[str, str]]] | None = None) -> dict[str, Any]:
+    """呼び出しの中身を決める設定。再開のとき、これが前の記録と同じでなければ止める。
+
+    layout=labeled のときだけ、不良品の見本の枚数・選んだ画像と説明・説明の文・cachePoint の有無を足す
+    （それ以前の記録と同じキーのままにして、前の実験の再開を妨げない）。
+    """
     prompt_sha = hashlib.sha256(
         json.dumps([prompt_text, system_text, cfg.prompt_vars], ensure_ascii=False, sort_keys=True).encode("utf-8")
     ).hexdigest()[:12]
-    return {
+    identity = {
         "model_id": cfg.model_id,
         "service_tier_requested": cfg.service_tier,
         "prompt_version": cfg.prompt_version,
@@ -229,6 +278,17 @@ def call_identity(cfg: RunConfig, prompt_text: str, system_text: str | None) -> 
         "ref_note": cfg.ref_note,
         "additional_fields": cfg.additional_fields,
     }
+    if cfg.layout == "labeled":
+        defects_sha = hashlib.sha256(
+            json.dumps(defect_refs_by_cat or {}, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:12]
+        identity.update({
+            "n_defect_refs": cfg.n_defect_refs,
+            "defect_refs_sha": defects_sha,
+            "labels": cfg.labels,
+            "cache_point": cfg.cache_point,
+        })
+    return identity
 
 
 def check_resume_identity(previous: list[dict[str, Any]], identity: dict[str, Any]) -> None:

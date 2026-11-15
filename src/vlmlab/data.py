@@ -130,6 +130,62 @@ def make_knn_train(table: pd.DataFrame, exclude_ids: set[str], n_normal: int = 1
     return out
 
 
+# VisA の image_anno.csv の欠陥の種類（英語）→ 見本の説明に使う日本語（12/3 の記事。訳は筆者）
+DEFECT_TYPE_JA = {
+    "melt": "溶け", "missing": "部品の欠落", "bent": "曲がり", "scratch": "傷",
+    "bubble": "気泡", "discolor": "変色", "leak": "漏れ", "misshape": "変形",
+}
+
+
+def load_defect_types(visa_root: str | Path, categories=("pcb1", "capsules")) -> pd.DataFrame:
+    """各品目の image_anno.csv を読み、不良品の画像のパスと欠陥の種類（label 列。複数は「,」区切り）を返す。"""
+    rows = []
+    for cat in categories:
+        anno = pd.read_csv(Path(visa_root) / cat / "image_anno.csv")
+        anno = anno[anno["label"] != "normal"]
+        rows.append(pd.DataFrame({"path": anno["image"], "defect_type": anno["label"]}))
+    return pd.concat(rows, ignore_index=True)
+
+
+def defect_note(defect_type: str) -> str:
+    """欠陥の種類（"bubble,discolor" など）を日本語の説明（"気泡・変色"）にする。知らない種類なら止める。"""
+    parts = [t.strip() for t in defect_type.split(",")]
+    unknown = [t for t in parts if t not in DEFECT_TYPE_JA]
+    if unknown:
+        raise ValueError(f"unknown defect types {unknown}; add them to DEFECT_TYPE_JA")
+    return "・".join(DEFECT_TYPE_JA[t] for t in parts)
+
+
+def make_defect_refs(table: pd.DataFrame, defect_types: pd.DataFrame, exclude_ids: set[str], n_per_category: int = 3,
+                     categories=("pcb1", "capsules")) -> pd.DataFrame:
+    """不良品の見本（CI-D2）：各品目で、評価に使わない不良品から、欠陥の種類が違う n 枚。
+
+    - 候補は test の anomaly のうち exclude_ids（評価に使う画像）に入っていないもの（VisA の train に不良品は無い）
+    - 欠陥の種類（image_anno.csv の label の文字列そのもの）ごとに候補を数え、多い順（同数なら名前の順）に n 種類
+    - 種類ごとに1枚を random_state=42 で選ぶ。ref_rank は種類の順（見本1枚の条件では rank 1 を使う）
+    """
+    with_type = table.merge(defect_types, on="path", how="left")
+    rows = []
+    for cat in categories:
+        pool = with_type[(with_type.category == cat) & (with_type.split == "test") & (with_type.label == "anomaly")
+                         & ~with_type.image_id.isin(exclude_ids)]
+        if pool["defect_type"].isna().any():
+            raise ValueError(f"defect type missing for some {cat} anomalies")
+        pool = pool.sort_values("image_id")  # 入力の並びによらず同じ結果にする
+        counts = pool.groupby("defect_type").size().reset_index(name="n")
+        counts = counts.sort_values(["n", "defect_type"], ascending=[False, True])
+        if len(counts) < n_per_category:
+            raise ValueError(f"{cat}: only {len(counts)} defect types available, need {n_per_category}")
+        for rank, dtype in enumerate(counts["defect_type"].head(n_per_category), start=1):
+            rows.append(_sample(pool[pool.defect_type == dtype], 1).assign(ref_rank=rank))
+    out = pd.concat(rows, ignore_index=True)
+    out["note"] = out["defect_type"].map(defect_note)
+    out = out[["image_id", "ref_rank", "category", "label", "split", "path", "defect_type", "note"]]
+    if set(out.image_id) & exclude_ids:
+        raise ValueError("defect refs overlap with excluded images")
+    return out
+
+
 def write_splits(visa_root: str | Path, out_dir: str | Path) -> dict[str, Path]:
     table = load_split_table(visa_root)
     out = Path(out_dir)
@@ -140,16 +196,19 @@ def write_splits(visa_root: str | Path, out_dir: str | Path) -> dict[str, Path]:
     if set(refs.image_id) & (set(test.image_id) | set(wide.image_id)):
         raise ValueError("refs overlap with test images")
     knn = make_knn_train(table, set(test.image_id) | set(wide.image_id))
+    defect_refs = make_defect_refs(table, load_defect_types(visa_root), set(test.image_id) | set(wide.image_id))
     paths = {
         "visa_test_200": out / "visa_test_200.csv",
         "visa_refs": out / "visa_refs.csv",
         "visa_wide_120": out / "visa_wide_120.csv",
         "visa_knn_train": out / "visa_knn_train.csv",
+        "visa_defect_refs": out / "visa_defect_refs.csv",
     }
     test.to_csv(paths["visa_test_200"], index=False, lineterminator="\n")
     refs.to_csv(paths["visa_refs"], index=False, lineterminator="\n")
     wide.to_csv(paths["visa_wide_120"], index=False, lineterminator="\n")
     knn.to_csv(paths["visa_knn_train"], index=False, lineterminator="\n")
+    defect_refs.to_csv(paths["visa_defect_refs"], index=False, lineterminator="\n")
     return paths
 
 
