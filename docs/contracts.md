@@ -109,7 +109,7 @@
 | CI-Y3 | post | 正答率 =（TP+TN）/（TP+FP+TN+FN）。解析失敗は除く（D3）。有効な行が 0 件なら None。`binary_metrics` にキー `accuracy` を足す（既存のキーと値は変えない） |
 | CI-Y4 | pre/post | `ng_counts`：各画像の repeat が 1〜n をちょうど1回ずつでなければ ValueError。label が画像の中で食い違えば ValueError。NG の回数 = pred が NG の回数。どれかの回が解析失敗の画像は除き（Y-D2）、除いた image_id を返す |
 | CI-Y5 | post | `operating_points`：しきい値の候補 = 全スコアの異なる値と +∞。それぞれで見逃し率と良品の通過率（CI-Y2 と同じ数え方）を、しきい値の昇順に返す |
-| CI-Y6 | post | 表の行：11/11 の A〜C の点の指標は D2（回ごとの平均・最小・最大）、並べ方1 は回ごとに CI-Y2 を出した平均・最小・最大（11/11 の business_metric と同じ）、参考に「画像ごとの D1 スコアの平均」（CI-K12 の Nova だけと同じ）でも出す。並べ方2 は CI-Y4 の NG 回数で画像ごとに出す。11/26 の行は1枚1判定（CI-K6）、並べ方1 は CI-K12 のスコア。並べ方2 は Nova だけ（n1_B の NG 回数）だけで出し、Claude を1回しか呼んでいない行（Claude だけ、段階判定）は None と理由 |
+| CI-Y6 | post | 表の行：11/11 の A〜C の点の指標は D2（回ごとの平均・最小・最大）、並べ方1 は回ごとに CI-Y2 を出した平均・最小・最大（11/11 の business_metric と同じ）、参考に「画像ごとの D1 スコアの平均」（CI-K12 の Nova だけと同じ。小数9桁に丸める）でも出す。並べ方2 は CI-Y4 の NG 回数で画像ごとに出す。11/26 の行は1枚1判定（CI-K6）、並べ方1 は CI-K12 のスコア。並べ方2 は Nova だけ（n1_B の NG 回数）だけで出し、Claude を1回しか呼んでいない行（Claude だけ、段階判定）は None と理由 |
 
 ## 前提（assumption）
 

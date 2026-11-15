@@ -145,3 +145,33 @@ def test_operating_points_lists_each_threshold_in_order():
     assert op["threshold"].tolist() == [0, 1, 3, math.inf]
     assert op["miss_rate"].tolist() == [0.0, 0.0, 0.5, 1.0]
     assert op["pass_rate"].tolist() == [0.0, 0.5, 1.0, 1.0]
+
+
+# ---------------------------------------------------------------- CI-Y6（表の行）
+
+def test_repeated_condition_row():
+    """CI-Y6：点の指標は回ごとの平均、並べ方2は画像ごとの NG 回数、画像の平均スコアは丸めて同じ値にそろえる"""
+    from vlmlab.yardstick import repeated_condition
+
+    rows = []
+    # a: 不良品。3回とも NG（確信度 0.9）
+    rows += [("a", "anomaly", r, "NG", 0.9) for r in (1, 2, 3)]
+    # b: 不良品。1回目だけ NG（0.15）、残りは OK（1.0）→ スコア平均 0.05
+    rows += [("b", "anomaly", 1, "NG", 0.15), ("b", "anomaly", 2, "OK", 1.0), ("b", "anomaly", 3, "OK", 1.0)]
+    # c: 良品。3回とも OK（0.95）→ スコア 0.05 が3つ。b と同じ平均にならなければならない
+    rows += [("c", "normal", r, "OK", 0.95) for r in (1, 2, 3)]
+    # d: 良品。3回とも OK（1.0）
+    rows += [("d", "normal", r, "OK", 1.0) for r in (1, 2, 3)]
+    df = pd.DataFrame([{"image_id": i, "label": l, "repeat": r, "pred": p, "confidence": c,
+                        "latency_s": 1.0, "cost_usd": 0.001} for i, l, r, p, c in rows])
+    row, detail, ops = repeated_condition("x", df)
+    # 回ごとの正答率：1回目 4/4、2回目 3/4、3回目 3/4 → 平均 10/12
+    assert row["accuracy"] == pytest.approx(10 / 12)
+    assert row["accuracy_min"] == pytest.approx(0.75) and row["accuracy_max"] == 1.0
+    # NG 回数：a=3、b=1、c=0、d=0。見逃し 0 → t=1（b の値）。良品は2枚ともスコア 0 < 1 で通過
+    assert row["pass_5pct_ngcount"] == 1.0
+    # 画像の平均スコア：a=0.9、b=(0.15+0+0)/3=0.05、c=0.05、d=0。b と c は丸めて同じ値になる
+    imgmean = ops[0]
+    assert (imgmean["threshold"] == 0.05).sum() == 1
+    # 見逃し 0 → t=0.05。同点の c は通さず（NG 側）、d だけ通る
+    assert row["pass_5pct_conf_imgmean"] == 0.5

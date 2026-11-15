@@ -6,6 +6,8 @@
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
+  vlmlab yardstick --repeated NAME=CALLS,CONFIG... --nova CALLS,CONFIG --claude CALLS,CONFIG --embeddings JSONL --out DIR
+                                       評価の物差し（12/1 の記事。API は呼ばない）
 
   MMAD（11/19 の記事）
   vlmlab mmad prepare                  mmad.json を取得し、data/splits/mmad_1050.csv を作り、使う画像だけ取り出す
@@ -63,6 +65,14 @@ def main(argv: list[str] | None = None) -> None:
     cs.add_argument("--claude", required=True, help="2段目の Claude の実験（例 runs/n3_claude_refB）")
     cs.add_argument("--embeddings", required=True, help="埋め込みの記録（例 runs/n1_E/embeddings.jsonl）")
     cs.add_argument("--out", required=True)
+
+    ys = sub.add_parser("yardstick", help="評価の物差し：見逃しを決めたときの良品の通過率など（12/1 の記事。API は呼ばない）")
+    ys.add_argument("--repeated", nargs="+", required=True,
+                    help="3回繰り返した実験。NAME=記録の JSONL,設定の YAML（例 n1_A=raw/n1_A.jsonl,configs/n1_A.yaml）")
+    ys.add_argument("--nova", required=True, help="段階判定の1段目（記録の JSONL,設定の YAML）")
+    ys.add_argument("--claude", required=True, help="段階判定の2段目（記録の JSONL,設定の YAML）")
+    ys.add_argument("--embeddings", required=True, help="埋め込みの記録（ベクトル入り。例 runs/n1_E/embeddings.jsonl）")
+    ys.add_argument("--out", required=True)
 
     m = sub.add_parser("mmad", help="MMAD の選択式の問題（11/19 の記事）")
     msub = m.add_subparsers(dest="mcmd", required=True)
@@ -149,6 +159,23 @@ def main(argv: list[str] | None = None) -> None:
         from .report import load_run
         res = run_cascade(load_run(a.nova), load_run(a.claude), load_embeddings(a.embeddings))
         for k, v in write_outputs(res, a.out).items():
+            print(f"{k}: {v}")
+        print(f"best: {res['best']}")
+    elif a.cmd == "yardstick":
+        from .cascade import load_embeddings
+        from .report import load_calls
+        from .yardstick import build, write_outputs as y_write
+
+        def _pair(v: str):
+            calls, cfg = v.split(",", 1)
+            return load_calls(calls, cfg)
+
+        repeated = {}
+        for item in a.repeated:
+            name, v = item.split("=", 1)
+            repeated[name] = _pair(v)
+        res = build(repeated, _pair(a.nova), _pair(a.claude), load_embeddings(a.embeddings))
+        for k, v in y_write(res, a.out).items():
             print(f"{k}: {v}")
         print(f"best: {res['best']}")
 

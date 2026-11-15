@@ -21,10 +21,16 @@ TARGET_MISS_RATES = (0.02, 0.05)
 def load_run(run_dir: str | Path, parse_override: dict[str, Any] | None = None) -> pd.DataFrame:
     """1つの実験の記録を読み、(image_id, repeat) ごとに最後の成功した呼び出しだけを残す。"""
     run_dir = Path(run_dir)
-    records = load_jsonl(run_dir / "calls.jsonl")
+    return load_calls(run_dir / "calls.jsonl", run_dir / "config.yaml", parse_override)
+
+
+def load_calls(calls_path: str | Path, config_path: str | Path,
+               parse_override: dict[str, Any] | None = None) -> pd.DataFrame:
+    """記録のファイルと設定のファイルを別々に指定して読む（記事の results/raw/ の写しを読むため）。"""
+    records = load_jsonl(Path(calls_path))
     if not records:
-        raise ValueError(f"no records in {run_dir}")
-    cfg = yaml.safe_load((run_dir / "config.yaml").read_text(encoding="utf-8")) or {}
+        raise ValueError(f"no records in {calls_path}")
+    cfg = yaml.safe_load(Path(config_path).read_text(encoding="utf-8")) or {}
     spec = ParseSpec.from_dict(parse_override if parse_override is not None else cfg.get("parse"))
     df = pd.DataFrame(records)
     ok = df[df["api_error"].isna()].drop_duplicates(["image_id", "repeat"], keep="last").copy()
