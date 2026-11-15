@@ -1,0 +1,17 @@
+# 11/26 の記事：段階判定の2段目。Claude Sonnet 4.6 で、11/11 の条件 B と同じ画像・見本・プロンプト
+# 1段目（Nova 2 Lite）は 11/11 の n1_B の記録（3回分）を使い回すので、ここでは Claude だけを1回呼ぶ
+name: n3_claude_refB
+split: data/splits/visa_test_200.csv
+refs: data/splits/visa_refs.csv
+n_refs: 1
+model_id: jp.anthropic.claude-sonnet-4-6   # 11/19 の記事と同じ版（Regional CRIS、東京の単価）
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v1_judge.txt
+image_long_edge: 768                # 見本・検査対象とも長辺768pxに縮める（費用を抑えるため。plan.md の手順2）
+inference: {temperature: 0, maxTokens: 300}
+repeats: 1
+budget_usd: 2.5                     # plan.md の予算ガード（見積り約1.7 USD）
+parse:
+  allow_code_fence: true            # n1_B と同じ読み取り規則にそろえる
+  allow_trailing_code_fence: true   # 試運転で10件中8件が「説明の文章 → 末尾に ```json の囲み」だった。末尾の囲みを読む（CI-P7、2026-11-11 決定）

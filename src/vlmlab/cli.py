@@ -5,6 +5,7 @@
   vlmlab run CONFIG [--limit N] [--dry-run]
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
+  vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
 
   MMAD（11/19 の記事）
   vlmlab mmad prepare                  mmad.json を取得し、data/splits/mmad_1050.csv を作り、使う画像だけ取り出す
@@ -56,6 +57,12 @@ def main(argv: list[str] | None = None) -> None:
     rp.add_argument("run_dirs", nargs="+")
     rp.add_argument("--out", required=True)
     rp.add_argument("--tag", default="summary")
+
+    cs = sub.add_parser("cascade", help="段階判定：記録から回す条件ごとの指標を計算する（11/26 の記事。API は呼ばない）")
+    cs.add_argument("--nova", required=True, help="1段目の Nova の実験（例 runs/n1_B）")
+    cs.add_argument("--claude", required=True, help="2段目の Claude の実験（例 runs/n3_claude_refB）")
+    cs.add_argument("--embeddings", required=True, help="埋め込みの記録（例 runs/n1_E/embeddings.jsonl）")
+    cs.add_argument("--out", required=True)
 
     m = sub.add_parser("mmad", help="MMAD の選択式の問題（11/19 の記事）")
     msub = m.add_subparsers(dest="mcmd", required=True)
@@ -137,6 +144,13 @@ def main(argv: list[str] | None = None) -> None:
         from .report import build_report
         for k, v in build_report(a.run_dirs, a.out, a.tag).items():
             print(f"{k}: {v}")
+    elif a.cmd == "cascade":
+        from .cascade import load_embeddings, run_cascade, write_outputs
+        from .report import load_run
+        res = run_cascade(load_run(a.nova), load_run(a.claude), load_embeddings(a.embeddings))
+        for k, v in write_outputs(res, a.out).items():
+            print(f"{k}: {v}")
+        print(f"best: {res['best']}")
 
 
 def _mmad(a: argparse.Namespace) -> None:

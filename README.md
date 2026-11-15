@@ -25,6 +25,7 @@ bedrock-vlm-inspection-lab/
 │   ├── metrics.py          評価指標
 │   ├── cost.py             単価表と費用の計算、累計費用での停止
 │   ├── report.py           集計表（CSV と Markdown）を出す
+│   ├── cascade.py          段階判定（迷った画像だけ上位モデルに回す）を記録から計算する
 │   ├── cli.py              コマンドライン（vlmlab）
 │   └── mmad/               MMAD の選択式の問題（取得・プロンプト・呼び出し・採点・集計）
 ├── tests/                  単体テスト
@@ -141,6 +142,20 @@ uv run vlmlab report runs/n1_A runs/n1_B runs/n1_C --out results --tag summary_2
 ## データ
 
 [VisA](https://registry.opendata.aws/visa/)（Zou et al., ECCV 2022、CC BY 4.0）を使います。データ本体はコミットしていません。取得方法は [data/README.md](data/README.md) を見てください。
+
+## 段階判定（11/26 の記事）
+
+1段目（Nova 2 Lite の3回、または埋め込みの距離）で「迷った」画像だけを上位モデル（Claude）に回したときの、F1・誤検知率・回した割合・1,000枚あたりの費用・レイテンシを計算します。上位モデルは全件で1回ずつ呼んでおき、回す条件ごとの結果は記録から組み合わせるので、条件を何通り試しても API は呼びません。
+
+```bash
+uv run vlmlab run configs/n3_claude_refB.yaml --limit 10      # 試運転（Claude Sonnet 4.6、JP Geo）
+uv run vlmlab run configs/n3_claude_refB.yaml                 # 本番（200枚×1回）
+uv run vlmlab cascade --nova runs/n1_B --claude runs/n3_claude_refB     --embeddings runs/n1_E/embeddings.jsonl --out results
+```
+
+- 回す条件は R1（3回の判定が割れた）、R2（確信度<0.8）、R3（NG と言った）、R4（R1 または R3）、R5（確信度<τ）、R6（同じ品目の学習用の良品との最小コサイン距離が、良品どうしの距離の百分位以上）です。定義は [docs/contracts.md](docs/contracts.md) の CI-K1〜K12 にあります
+- `cascade_rules.csv`・`.md`（条件ごとの表）、`fixed_and_broken.csv`、`cascade_images.csv`、`confidence_bands.csv`、`business_metric.csv`、`e_thresholds.csv` を出します
+- Claude は説明のあとに ```` ```json ```` の囲みで JSON を付けるので、設定で `parse.allow_trailing_code_fence: true` にしています（CI-P7）
 
 ## MMAD の選択式の問題（11/19 の記事）
 
