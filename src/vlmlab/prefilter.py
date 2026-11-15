@@ -123,6 +123,8 @@ def evaluate(df: pd.DataFrame, send: pd.Series, rest: pd.Series) -> dict[str, An
         keys = ("tp", "fp", "tn", "fn", "precision", "recall", "f1", "false_positive_rate", "miss_rate") if not prefix \
             else ("f1", "false_positive_rate", "miss_rate")
         out.update({f"{prefix}{k}": m[k] for k in keys})
+        if not prefix:
+            out["n_valid"] = m["n_valid"]
         costs = df.loc[send, cost_col]
         out[f"{prefix}cost_per_1000_usd"] = None if costs.map(_miss).any() else float(costs.sum()) / len(df) * 1000
     return out
@@ -194,3 +196,56 @@ def time_summary(ad: pd.DataFrame, meta: list[dict[str, Any]]) -> dict[str, Any]
 def run_prefilter(ad: pd.DataFrame, nova_calls: pd.DataFrame) -> dict[str, Any]:
     df = join(ad, nova_calls)
     return {"table": df, "rows": conditions(df), "scores": score_summary(df)}
+
+
+# ---------------------------------------------------------------- 参考：2段目を替える（CI-F9、F10）
+
+ALT_RESTS = RESTS
+
+
+def join_stage2(df: pd.DataFrame, calls: pd.DataFrame) -> pd.DataFrame:
+    """CI-F9：1枚1回の2段目の記録を df に足す（s2_pred、s2_cost）。画像・正解・品目が違う、1枚1回でなければ止める。"""
+    counts = calls.groupby("image_id").size()
+    if (counts != 1).any() or set(calls["repeat"]) != {1}:
+        raise ValueError("stage-2 records must have exactly one call (repeat=1) per image")
+    c = calls.set_index("image_id")
+    if set(c.index) != set(df.index):
+        raise ValueError("stage-2 image set differs from AnomalyDINO")
+    for col in ("label", "category"):
+        diff = df.index[df[col] != c.loc[df.index, col]]
+        if len(diff):
+            raise ValueError(f"stage-2 {col} differs for {diff[:5].tolist()}")
+    out = df.copy()
+    out["s2_pred"] = pd.Series([None if _miss(p) else p for p in c.loc[df.index, "pred"]], index=df.index, dtype=object)
+    out["s2_cost"] = c.loc[df.index, "cost_usd"].astype(float)
+    return out
+
+
+def evaluate_stage2(df: pd.DataFrame, send: pd.Series, rest: pd.Series) -> dict[str, Any]:
+    """CI-F10：2段目が s2 のときの指標。解析失敗は rest（CI-F5）、費用は回した画像の s2_cost（解析失敗も呼んだので数える）。"""
+    pred = final_pred(df, send, rest, "s2_pred")
+    m = M.binary_metrics(pd.DataFrame({"label": df["label"], "pred": pred}))
+    costs = df.loc[send, "s2_cost"]
+    return {"n_images": len(df), "n_sent": int(send.sum()), "send_rate": float(send.mean()), "n_valid": m["n_valid"],
+            "n_stage2_parse_fail_sent": int((send & df["s2_pred"].map(_miss)).sum()),
+            **{k: m[k] for k in ("tp", "fp", "tn", "fn", "precision", "recall", "f1", "false_positive_rate", "miss_rate")},
+            "cost_per_1000_usd": None if costs.map(_miss).any() else float(costs.sum()) / len(df) * 1000}
+
+
+def alt_conditions(df: pd.DataFrame, stage2: str, scope: str = "category") -> list[dict[str, Any]]:
+    """CI-F10：「2段目だけ」（解析失敗は除く。11/26 の D3 と同じ）と、上位 X%（回さない画像は OK・AnomalyDINO の判定）。"""
+    allsend = pd.Series(True, index=df.index)
+    none_rest = pd.Series([None] * len(df), index=df.index, dtype=object)
+    ok = pd.Series("OK", index=df.index)
+    ad = {m: pd.Series(np.where(df["score"] >= thresholds(df, scope, m), "NG", "OK"), index=df.index)
+          for m in TARGET_MISS_RATES}
+    rows = [{"stage2": stage2, "condition": f"{stage2} だけ", "routing": "all", "scope": "-", "x_pct": None,
+             "rest": "-", "threshold_from_labels": False, **evaluate_stage2(df, allsend, none_rest)}]
+    for pct in TOP_PERCENTS:
+        send = top_percent(df, scope, pct)
+        for rest in ALT_RESTS:
+            rest_s = ok if rest == "OK" else ad[0.02 if rest == "AD_miss2" else 0.05]
+            rows.append({"stage2": stage2, "condition": f"2段：上位{pct}%を回す", "routing": "top", "scope": scope,
+                         "x_pct": pct, "rest": rest, "threshold_from_labels": rest != "OK",
+                         **evaluate_stage2(df, send, rest_s)})
+    return rows

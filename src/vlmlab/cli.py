@@ -79,6 +79,8 @@ def main(argv: list[str] | None = None) -> None:
     pf.add_argument("--scores", nargs="+", required=True,
                     help="解像度の名前=AnomalyDINO の実験（先頭が主）。例 448=runs/ad1_anomalydino")
     pf.add_argument("--nova", required=True, help="Nova の実験（例 runs/n1_B）")
+    pf.add_argument("--stage2", nargs="*", default=[],
+                    help="参考：2段目を替える。表示名=1枚1回の実験（例 \"Nova Pro=runs/n1_D\"）。主の解像度で計算する")
     pf.add_argument("--out", required=True)
 
     m = sub.add_parser("mmad", help="MMAD の選択式の問題（11/19 の記事）")
@@ -162,8 +164,8 @@ def main(argv: list[str] | None = None) -> None:
         for k, v in build_report(a.run_dirs, a.out, a.tag).items():
             print(f"{k}: {v}")
     elif a.cmd == "prefilter":
-        from .prefilter import load_scores, run_prefilter, time_summary
-        from .prefilter_report import write_outputs
+        from .prefilter import alt_conditions, join_stage2, load_scores, run_prefilter, time_summary
+        from .prefilter_report import NOVA_LABEL, write_outputs
         from .report import load_run
         from .run import load_jsonl
         nova = load_run(a.nova)
@@ -173,7 +175,16 @@ def main(argv: list[str] | None = None) -> None:
             ad_runs[name] = load_scores(run_dir)
             results[name] = run_prefilter(ad_runs[name], nova)
             times[name] = time_summary(ad_runs[name], load_jsonl(Path(run_dir) / "meta.jsonl"))
-        for k, v in write_outputs(results, ad_runs, times, a.out).items():
+        alt_rows = []
+        if a.stage2:
+            df_main = results[next(iter(results))]["table"]
+            # 比べるために、主の2段目（Nova 2 Lite の repeat=1）も同じ形で並べる
+            alt_rows += alt_conditions(df_main.assign(s2_pred=df_main["nova1_pred"], s2_cost=df_main["nova1_cost"]),
+                                       NOVA_LABEL)
+            for spec in a.stage2:
+                name, run_dir = spec.split("=", 1)
+                alt_rows += alt_conditions(join_stage2(df_main, load_run(run_dir)), name)
+        for k, v in write_outputs(results, ad_runs, times, a.out, alt_rows).items():
             print(f"{k}: {v}")
     elif a.cmd == "anomalydino":
         import os

@@ -137,12 +137,13 @@ AnomalyDINO の異常度と、Nova 2 Lite の記録（11/11 の条件 B、`runs/
 ```bash
 uv run --extra anomalydino vlmlab prefilter \
   --scores 448=runs/ad1_anomalydino 672=runs/ad1_anomalydino_r672 \
-  --nova runs/n1_B --out results
+  --nova runs/n1_B --stage2 "Nova Pro=runs/n1_D" "Claude Sonnet 4.6=runs/n3_claude_refB" --out results
 ```
 
 - 回す条件：異常度の上位 10・20・30・50%（品目ごと・全体）と、テスト画像の正解で決めた見逃し率 2%・5% のしきい値以上（楽観的な値）
 - 回さなかった画像は OK とする場合と、AnomalyDINO の判定（見逃し率 2%・5% のしきい値）とする場合
 - 回した画像の判定は Nova の repeat=1（費用も1回分）。3回の多数決は `maj_` の列（費用は3回分）
+- `--stage2` は参考：2段目を1枚1回の別の記録に替えた表（`prefilter_summary.md` の「参考：2段目を替えた場合」）と `fig_prefilter_alt.png` を足す。解析失敗は回さない画像と同じ扱い（CI-F9・F10）
 - `prefilter_summary.csv`・`.md`（表1）、`anomalydino_scores.csv`（画像ごと）、`anomalydino_score_summary.csv`（品目ごとの AUROC と分布）、`anomalydino_time.json`、`fig_prefilter.png` を出します。定義は CI-F1〜F8
 
 ## 記録の形（runs/<name>/calls.jsonl、1行1呼び出し）

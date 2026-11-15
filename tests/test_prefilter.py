@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from vlmlab.prefilter import (conditions, evaluate, join, score_summary, threshold_at_miss, thresholds,
-                              top_percent)
+from vlmlab.prefilter import (alt_conditions, conditions, evaluate, evaluate_stage2, join, join_stage2,
+                              score_summary, threshold_at_miss, thresholds, top_percent)
 
 
 def _ad(rows):
@@ -146,3 +146,57 @@ def test_score_summary_auroc():
     assert s.loc["b", "auroc"] == pytest.approx(1.0)
     assert s.loc["全体", "auroc"] == pytest.approx(6 / 9)
     assert s.loc["a", "normal_median"] == pytest.approx(0.2)
+
+
+def _stage2(spec):
+    """spec: {image_id: (category, label, pred, cost)}"""
+    return pd.DataFrame([{"image_id": i, "category": c, "label": l, "repeat": 1, "pred": p, "cost_usd": cost}
+                         for i, (c, l, p, cost) in spec.items()])
+
+
+def _s2_base():
+    return _stage2({
+        "a/n1": ("a", "normal", "OK", 0.01), "a/n2": ("a", "normal", None, 0.01),
+        "a/x1": ("a", "anomaly", "NG", 0.01), "a/x2": ("a", "anomaly", None, 0.01),
+        "b/n1": ("b", "normal", "NG", 0.02), "b/x1": ("b", "anomaly", "NG", 0.02),
+    })
+
+
+def test_join_stage2_checks():
+    """CI-F9：1枚1回・画像の集合・正解が一致しなければ止める。"""
+    df = join(*_base())
+    s2 = _s2_base()
+    out = join_stage2(df, s2)
+    assert out.loc["a/n2", "s2_pred"] is None and out.loc["b/n1", "s2_cost"] == pytest.approx(0.02)
+    with pytest.raises(ValueError, match="exactly one"):
+        join_stage2(df, pd.concat([s2, s2.iloc[:1]]))
+    with pytest.raises(ValueError, match="image set"):
+        join_stage2(df, s2.iloc[1:])
+    bad = s2.copy()
+    bad.loc[0, "label"] = "anomaly"
+    with pytest.raises(ValueError, match="label"):
+        join_stage2(df, bad)
+
+
+def test_evaluate_stage2_fallback_and_cost():
+    """CI-F10：回して解析失敗なら rest。費用は解析失敗も含めて回した分。"""
+    df = join_stage2(join(*_base()), _s2_base())
+    send = pd.Series([False, True, True, True, False, False], index=df.index)  # a/n2(None) a/x1(NG) a/x2(None)
+    r = evaluate_stage2(df, send, pd.Series("OK", index=df.index))
+    # a/n1 OK、a/n2 None→OK、a/x1 NG、a/x2 None→OK(見逃し)、b/n1 OK（回さない）、b/x1 OK（見逃し）
+    assert (r["tp"], r["fp"], r["tn"], r["fn"]) == (1, 0, 3, 2)
+    assert r["n_stage2_parse_fail_sent"] == 2
+    assert r["cost_per_1000_usd"] == pytest.approx(0.03 / 6 * 1000)
+    r2 = evaluate_stage2(df, send, pd.Series("NG", index=df.index))
+    assert r2["fn"] == 0 and r2["fp"] == 3  # 誤検知：a/n2（解析失敗→NG）、a/n1・b/n1（回さない→NG）
+
+
+def test_alt_conditions_only_row_excludes_parse_failures():
+    """CI-F10：「2段目だけ」は解析失敗を除き（D3）、費用は全件分。"""
+    df = join_stage2(join(*_base()), _s2_base())
+    rows = alt_conditions(df, "X")
+    only = rows[0]
+    assert only["condition"] == "X だけ" and only["n_valid"] == 4
+    assert only["cost_per_1000_usd"] == pytest.approx((0.01 * 4 + 0.02 * 2) / 6 * 1000)
+    tops = [r for r in rows if r["routing"] == "top"]
+    assert len(tops) == 12 and {r["rest"] for r in tops} == {"OK", "AD_miss2", "AD_miss5"}
