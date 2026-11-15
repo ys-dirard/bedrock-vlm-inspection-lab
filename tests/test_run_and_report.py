@@ -269,3 +269,106 @@ def test_config_rejects_invalid_layout_and_inference(tmp_path, extra):
     p.write_text(yaml.safe_dump(d), encoding="utf-8")
     with pytest.raises(ValueError):
         RunConfig.load(p)
+
+
+def test_service_tier_sent():
+    """CI-B3：standard は explicit のときだけ default を送る。flex は常に送る。知らない層は ValueError"""
+    from vlmlab.bedrock import service_tier_sent
+    assert service_tier_sent("standard") is None
+    assert service_tier_sent("standard", explicit=True) == "default"
+    assert service_tier_sent("flex") == "flex" and service_tier_sent("flex", explicit=True) == "flex"
+    with pytest.raises(ValueError):
+        service_tier_sent("batch")
+    k = build_converse_kwargs(ModelRequest(model_id="m", images=[], text="t", service_tier_explicit=True))
+    assert k["serviceTier"] == {"type": "default"}
+
+
+class TierModel(FakeModel):
+    """応答の serviceTier を決めて返す偽物"""
+
+    def __init__(self, resolved):
+        super().__init__()
+        self.resolved = resolved
+
+    def invoke(self, req):
+        r = super().invoke(req)
+        r.service_tier_resolved = self.resolved(len(self.requests)) if callable(self.resolved) else self.resolved
+        r.latency_total_s = r.latency_s
+        return r
+
+
+def _flex_lab(lab):
+    base, visa, _ = lab
+    cfg = RunConfig.load(base / "c.yaml")
+    cfg.service_tier = "flex"
+    cfg.repeats = 1
+    return base, visa, cfg
+
+
+def test_cost_uses_resolved_tier_price(lab):
+    """CI-C7：flex を頼んで default で処理されたら standard の単価で数える。記録に送った層・費用の層・再試行が残る"""
+    base, visa, cfg = _flex_lab(lab)
+    pricing = PricingTable([Price("m", "standard", 0.4, 3.2), Price("m", "flex", 0.2, 1.6)])
+    plan = plan_run(cfg, base, base / "runs")
+    model = TierModel(lambda n: "default" if n == 2 else "flex")
+    s = execute(plan, model, pricing, visa, base, log=lambda _: None)
+    assert s["called"] == 12 and s["stopped"] is None
+    assert all(r.service_tier == "flex" for r in model.requests)
+    recs = [json.loads(l) for l in (plan.out_dir / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert recs[0]["service_tier_sent"] == "flex" and recs[0]["cost_tier"] == "flex"
+    assert recs[0]["cost_usd"] == pytest.approx((700 * 0.2 + 40 * 1.6) / 1e6)
+    assert recs[1]["service_tier_resolved"] == "default" and recs[1]["cost_tier"] == "standard"
+    assert recs[1]["cost_usd"] == pytest.approx((700 * 0.4 + 40 * 3.2) / 1e6)
+    assert {"latency_total_s", "retry_errors"} <= set(recs[0])
+
+
+def test_unknown_resolved_tier_price_stops_after_recording(lab):
+    """CI-C7：処理された層の単価が無ければ、その記録を残して止まる（費用は None）"""
+    base, visa, cfg = _flex_lab(lab)
+    plan = plan_run(cfg, base, base / "runs")
+    s = execute(plan, TierModel("priority"), PricingTable([Price("m", "flex", 0.2, 1.6)]), visa, base,
+                log=lambda _: None)
+    assert s["called"] == 1 and "priority" in s["stopped"]
+    recs = [json.loads(l) for l in (plan.out_dir / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(recs) == 1 and recs[0]["cost_usd"] is None and recs[0]["cost_tier"] == "priority"
+
+
+def test_missing_resolved_tier_uses_requested_price(lab):
+    """応答に serviceTier が無いときは頼んだ層の単価"""
+    base, visa, cfg = _flex_lab(lab)
+    plan = plan_run(cfg, base, base / "runs")
+    execute(plan, TierModel(None), PricingTable([Price("m", "flex", 0.2, 1.6)]), visa, base, log=lambda _: None)
+    rec = json.loads((plan.out_dir / "calls.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert rec["cost_tier"] == "flex" and rec["cost_usd"] == pytest.approx((700 * 0.2 + 40 * 1.6) / 1e6)
+
+
+def test_resume_refuses_when_explicit_tier_changes(lab):
+    """CI-R1：送る serviceTier が変わったら（standard の省略 → default を明示）再開しない"""
+    base, visa, pricing = lab
+    cfg = RunConfig.load(base / "c.yaml")
+    cfg.repeats = 1
+    plan = plan_run(cfg, base, base / "runs")
+    execute(plan, FakeModel(), pricing, visa, base, log=lambda _: None)
+    cfg.service_tier_explicit = True
+    with pytest.raises(RuntimeError, match="service_tier_sent"):
+        execute(plan_run(cfg, base, base / "runs"), FakeModel(), pricing, visa, base, log=lambda _: None)
+
+
+def test_config_rejects_unknown_service_tier(tmp_path):
+    import yaml
+    d = {"name": "x", "split": "s.csv", "model_id": "m", "region": "r", "prompt": "p.txt", "budget_usd": 1.0,
+         "service_tier": "batch"}
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.safe_dump(d), encoding="utf-8")
+    with pytest.raises(ValueError):
+        RunConfig.load(p)
+
+
+def test_suffix_names_run_dir(lab):
+    base, _, _ = lab
+    cfg = RunConfig.load(base / "c.yaml")
+    assert plan_run(cfg, base, base / "runs", suffix="day1").run_name == "t__day1"
+    assert plan_run(cfg, base, base / "runs", limit=4, suffix="night1").run_name == "t__night1__trial4"
+    assert plan_run(cfg, base, base / "runs").run_name == "t"
+    with pytest.raises(ValueError):
+        plan_run(cfg, base, base / "runs", suffix="../x")

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import uuid
 from dataclasses import dataclass, field
@@ -18,8 +19,8 @@ from typing import Any, Callable
 import pandas as pd
 import yaml
 
-from .bedrock import LAYOUTS, ModelRequest, ModelResponse, VisionModel
-from .cost import BudgetExceeded, BudgetGuard, PricingTable, call_cost
+from .bedrock import LAYOUTS, RESOLVED_TO_TIER, ModelRequest, ModelResponse, VisionModel, service_tier_sent
+from .cost import BudgetExceeded, BudgetGuard, Price, PricingTable, call_cost
 from .data import EncodedImage, load_image
 from .parse import ParseSpec, parse_response
 
@@ -39,6 +40,8 @@ class RunConfig:
     system_prompt: str | None = None
     prompt_vars: dict[str, dict[str, str]] = field(default_factory=dict)  # 品目ごとの差し替え {{key}}
     service_tier: str = "standard"
+    service_tier_explicit: bool = False  # True なら standard でも serviceTier={"type": "default"} を送る（CI-B3）
+    read_timeout_s: int = 120  # 1回の呼び出しの読み取りタイムアウト（秒）
     image_long_edge: int | None = None
     layout: str = "refs_first"  # 画像と文の並べ方（bedrock.LAYOUTS）
     ref_note: str | None = None  # layout=target_first のとき、見本の前に置く文
@@ -58,6 +61,7 @@ class RunConfig:
             raise ValueError("n_refs > 0 requires refs")
         if cfg.repeats < 1:
             raise ValueError("repeats must be >= 1")
+        service_tier_sent(cfg.service_tier, cfg.service_tier_explicit)  # 知らない層なら ValueError
         if cfg.layout not in LAYOUTS:
             raise ValueError(f"layout must be one of {LAYOUTS}")
         if cfg.ref_note and cfg.layout != "target_first":
@@ -105,7 +109,11 @@ class RunPlan:
     refs_by_cat: dict[str, list[str]]
 
 
-def plan_run(cfg: RunConfig, base_dir: Path, runs_dir: Path, limit: int | None = None) -> RunPlan:
+def plan_run(cfg: RunConfig, base_dir: Path, runs_dir: Path, limit: int | None = None,
+             suffix: str | None = None) -> RunPlan:
+    """suffix を付けると runs/<name>__<suffix>/ に出す（同じ設定を時間帯を変えて別々に回すとき）。"""
+    if suffix is not None and not re.fullmatch(r"[A-Za-z0-9_-]+", suffix):
+        raise ValueError(f"suffix must match [A-Za-z0-9_-]+, got {suffix!r}")
     split = pd.read_csv(base_dir / cfg.split)
     items = select_limit(split, limit)
     refs_by_cat: dict[str, list[str]] = {}
@@ -121,7 +129,9 @@ def plan_run(cfg: RunConfig, base_dir: Path, runs_dir: Path, limit: int | None =
     for cat in items.category.unique():
         for text in filter(None, [prompt_text, system_text]):
             fill_template(text, cfg.prompt_vars.get(cat, {}))
-    run_name = cfg.name if limit is None else f"{cfg.name}__trial{limit}"
+    run_name = cfg.name if suffix is None else f"{cfg.name}__{suffix}"
+    if limit is not None:
+        run_name = f"{run_name}__trial{limit}"
     return RunPlan(cfg, run_name, runs_dir / run_name, items, refs_by_cat)
 
 
@@ -184,14 +194,23 @@ def execute(
                     layout=cfg.layout,
                     ref_note=cfg.ref_note,
                     service_tier=cfg.service_tier,
+                    service_tier_explicit=cfg.service_tier_explicit,
                     additional_fields=cfg.additional_fields,
                 )
                 called_at = datetime.now(JST).isoformat(timespec="seconds")
                 resp = model.invoke(req)
-                rec = make_record(cfg, run_id, plan.run_name, repeat, row, resp, spec, price, identity, called_at)
+                call_price, cost_tier = price_for_call(pricing, cfg.model_id, cfg.service_tier,
+                                                       resp.service_tier_resolved)
+                rec = make_record(cfg, run_id, plan.run_name, repeat, row, resp, spec, call_price, identity,
+                                  called_at, cost_tier)
                 # 先に記録を書く（費用が不明で止まるときも、払った呼び出しの記録は残す）
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 f.flush()
+                if rec["cost_usd"] is None:  # CI-C7: 処理された層の単価が無い
+                    stopped = (f"cost unknown: {row.image_id} was served at tier {resp.service_tier_resolved!r} "
+                               f"(cost_tier={cost_tier!r}); add its price to pricing.yaml before continuing")
+                    n_called += 1
+                    break
                 guard.add(rec["cost_usd"])
                 n_called += 1
                 if resp.api_error:
@@ -202,6 +221,20 @@ def execute(
                "spent_usd": guard.spent_usd, "stopped": stopped}
     log(json.dumps(summary, ensure_ascii=False))
     return summary
+
+
+def price_for_call(pricing: PricingTable, model_id: str, requested: str,
+                   resolved: str | None) -> tuple[Price | None, str]:
+    """1呼び出しの費用に使う単価と層（CI-C7）。
+
+    応答の serviceTier（resolved）が頼んだ層と違えば、処理された層の単価を使う。
+    resolved が無い（応答に serviceTier が無い）ときは頼んだ層の単価。処理された層の単価が単価表に無ければ None。
+    """
+    tier = RESOLVED_TO_TIER.get(resolved, resolved) if resolved else requested
+    try:
+        return pricing.get(model_id, tier), tier
+    except KeyError:
+        return None, tier
 
 
 def read_prompts(cfg: RunConfig, base_dir: Path) -> tuple[str, str | None]:
@@ -218,6 +251,7 @@ def call_identity(cfg: RunConfig, prompt_text: str, system_text: str | None) -> 
     return {
         "model_id": cfg.model_id,
         "service_tier_requested": cfg.service_tier,
+        "service_tier_sent": service_tier_sent(cfg.service_tier, cfg.service_tier_explicit),
         "prompt_version": cfg.prompt_version,
         "prompt_sha": prompt_sha,
         "n_refs": cfg.n_refs,
@@ -242,8 +276,8 @@ def check_resume_identity(previous: list[dict[str, Any]], identity: dict[str, An
 
 
 def make_record(cfg: RunConfig, run_id: str, run_name: str, repeat: int, row: Any,
-                resp: ModelResponse, spec: ParseSpec, price, identity: dict[str, Any],
-                called_at: str) -> dict[str, Any]:
+                resp: ModelResponse, spec: ParseSpec, price: Price | None, identity: dict[str, Any],
+                called_at: str, cost_tier: str | None = None) -> dict[str, Any]:
     pr = parse_response(resp.raw_text, spec) if resp.api_error is None else None
     return {
         "run_name": run_name,
@@ -263,11 +297,14 @@ def make_record(cfg: RunConfig, run_id: str, run_name: str, repeat: int, row: An
         "cache_read_tokens": resp.cache_read_tokens,
         "cache_write_tokens": resp.cache_write_tokens,
         "latency_s": resp.latency_s,
+        "latency_total_s": resp.latency_total_s,
         "stop_reason": resp.stop_reason,
-        "cost_usd": call_cost(price, resp.input_tokens, resp.output_tokens,
-                              resp.cache_read_tokens, resp.cache_write_tokens),
+        "cost_usd": (call_cost(price, resp.input_tokens, resp.output_tokens,
+                               resp.cache_read_tokens, resp.cache_write_tokens) if price is not None else None),
+        "cost_tier": cost_tier or cfg.service_tier,  # 費用の単価を引いた層（CI-C7）
         "attempts": resp.attempts,
         "api_error": resp.api_error,
+        "retry_errors": resp.retry_errors,
         "server_latency_ms": resp.extra.get("server_latency_ms"),
         "timestamp": called_at,  # 呼び出した時刻（JST）
     }

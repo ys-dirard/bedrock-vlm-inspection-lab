@@ -2,7 +2,7 @@
 
   vlmlab fetch                         VisA の tar を取得して展開する（認証なし）
   vlmlab splits                        data/splits/ の CSV を作る
-  vlmlab run CONFIG [--limit N] [--dry-run]
+  vlmlab run CONFIG [--limit N] [--dry-run] [--suffix TAG]
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
@@ -41,6 +41,7 @@ def main(argv: list[str] | None = None) -> None:
     r.add_argument("config")
     r.add_argument("--limit", type=int, default=None, help="試運転の枚数（runs/<name>__trial<N>/ に出す）")
     r.add_argument("--dry-run", action="store_true", help="Bedrock を呼ばず、組み立てた内容だけ表示する")
+    r.add_argument("--suffix", default=None, help="runs/<name>__<suffix>/ に出す（例: 時間帯ごとに day1・night1）")
     r.add_argument("--visa-root", default="data/visa")
     r.add_argument("--pricing", default="pricing.yaml")
     r.add_argument("--runs-dir", default="runs")
@@ -112,7 +113,7 @@ def main(argv: list[str] | None = None) -> None:
         from .cost import PricingTable
         from .run import RunConfig, plan_run
         cfg = RunConfig.load(a.config)
-        plan = plan_run(cfg, ROOT, ROOT / a.runs_dir, a.limit)
+        plan = plan_run(cfg, ROOT, ROOT / a.runs_dir, a.limit, a.suffix)
         pricing = PricingTable.load(ROOT / a.pricing)
         price = pricing.get(cfg.model_id, cfg.service_tier)
         if a.dry_run:
@@ -125,7 +126,7 @@ def main(argv: list[str] | None = None) -> None:
             return
         from .bedrock import BedrockConverse
         from .run import execute
-        execute(plan, BedrockConverse(cfg.region), pricing, ROOT / a.visa_root, ROOT)
+        execute(plan, BedrockConverse(cfg.region, read_timeout_s=cfg.read_timeout_s), pricing, ROOT / a.visa_root, ROOT)
     elif a.cmd == "embed":
         from .embed_run import EmbedConfig, execute_embed, load_embedding_price, plan_images
         cfg = EmbedConfig.load(a.config)

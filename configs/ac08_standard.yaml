@@ -1,0 +1,20 @@
+# 12/8 の記事：Standard 層（2回目。1回目は 11/11 の n1_B の記録を使う）
+# n1_B と同じ条件（Nova 2 Lite、良品の見本1枚、原寸、v1_judge）。違いは service_tier_explicit だけで、
+# serviceTier={"type": "default"} を明示して送り、応答に処理された層を返させる（意味は省略と同じ。service-tiers-inference.html）
+# 時間帯ごとに --suffix day1 / night1 を付けて別の run にする
+name: ac08_standard
+split: data/splits/visa_test_200.csv
+refs: data/splits/visa_refs.csv
+n_refs: 1
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+service_tier_explicit: true
+read_timeout_s: 300                 # Flex とそろえる
+prompt: prompts/v1_judge.txt
+image_long_edge: null
+inference: {temperature: 0, maxTokens: 300}
+repeats: 1
+budget_usd: 0.15                    # 200件で約0.07 USD の見込み（1件 約0.00033 USD）
+parse:
+  allow_code_fence: true            # n1_B と同じ

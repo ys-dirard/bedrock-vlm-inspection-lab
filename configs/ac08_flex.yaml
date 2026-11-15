@@ -1,0 +1,18 @@
+# 12/8 の記事：Flex 層。ac08_standard.yaml と違うのは service_tier だけ
+# 時間帯ごとに --suffix day1 / night1 を付けて別の run にする
+name: ac08_flex
+split: data/splits/visa_test_200.csv
+refs: data/splits/visa_refs.csv
+n_refs: 1
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: flex
+service_tier_explicit: true         # flex は常に送る（standard とそろえて書いておく）
+read_timeout_s: 300                 # Flex は待ち時間が延びることがあるので長めに
+prompt: prompts/v1_judge.txt
+image_long_edge: null
+inference: {temperature: 0, maxTokens: 300}
+repeats: 1
+budget_usd: 0.15                    # 200件で約0.035 USD の見込み（Flex の単価。Standard で処理されたらその単価で数える）
+parse:
+  allow_code_fence: true

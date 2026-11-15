@@ -47,3 +47,22 @@ def test_non_retryable_error_returns_immediately():
     c = FakeClient([client_error("ValidationException"), OK])
     r = BedrockConverse("ap-northeast-1", base_delay_s=0, client=c).invoke(REQ)
     assert c.calls == 1 and r.api_error.startswith("ValidationException") and r.attempts == 1
+
+
+def test_total_latency_and_retry_errors_are_recorded():
+    """CI-B4：失敗した試行のエラーコードを順に残し、全体の所要時間は成功した1回の往復時間以上"""
+    c = FakeClient([client_error("ThrottlingException"), ReadTimeoutError(endpoint_url="https://example"), OK])
+    r = BedrockConverse("ap-northeast-1", base_delay_s=0, client=c).invoke(REQ)
+    assert r.retry_errors == ["ThrottlingException", "ReadTimeoutError"]
+    assert r.latency_total_s is not None and r.latency_total_s >= r.latency_s >= 0
+
+
+def test_no_retry_means_empty_retry_errors():
+    r = BedrockConverse("ap-northeast-1", base_delay_s=0, client=FakeClient([OK])).invoke(REQ)
+    assert r.retry_errors == [] and r.attempts == 1 and r.latency_total_s >= r.latency_s
+
+
+def test_failed_call_keeps_retry_errors_and_total_latency():
+    c = FakeClient([client_error("ThrottlingException")] * 2)
+    r = BedrockConverse("ap-northeast-1", max_attempts=2, base_delay_s=0, client=c).invoke(REQ)
+    assert r.api_error and r.retry_errors == ["ThrottlingException"] * 2 and r.latency_total_s >= 0

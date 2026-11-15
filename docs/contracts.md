@@ -49,16 +49,19 @@
 | CI-C4 | post | 予算の見張り：次の呼び出しの前に「累計 + これまでで最も高かった1呼び出しの費用」が予算を超えるなら止める（超える前に止める） |
 | CI-C5 | pre | 実行の前に、入力と出力の単価が両方とも null でないことを確かめる。null なら実行を始めない |
 | CI-C6 | post | 再開したときは、既にある記録の費用を累計に入れてから見張る。費用が不明な記録があれば再開しない（単価を直してから記録を作り直す） |
+| CI-C7 | post | 1呼び出しの費用は、応答の serviceTier（処理された層）の単価で数える。応答に serviceTier が無ければ頼んだ層の単価。処理された層の単価が単価表に無ければ費用は None とし、その記録を書いてから実行を止める。単価を引いた層を `cost_tier` に残す |
 
 ## run.py・bedrock.py（実行）
 
 | ID | 種類 | 条件 |
 | --- | --- | --- |
-| CI-R1 | pre | 再開のとき、呼び出しの中身を決める設定（モデル ID、層、プロンプトの版と中身のハッシュ、見本の枚数、縮小、temperature、maxTokens、topP、layout、ref_note、additional_fields）が前の記録と1つでも違えば、呼ぶ前に止める。読み取りの設定（parse）は後から変えてよい |
+| CI-R1 | pre | 再開のとき、呼び出しの中身を決める設定（モデル ID、層、送る serviceTier、プロンプトの版と中身のハッシュ、見本の枚数、縮小、temperature、maxTokens、topP、layout、ref_note、additional_fields）が前の記録と1つでも違えば、呼ぶ前に止める。読み取りの設定（parse）は後から変えてよい |
 | CI-R2 | pre | 品目ごとの差し替え（prompt_vars）が足りない品目があれば、最初の呼び出しの前に止める |
 | CI-R3 | post | (image_id, repeat) ごとに、成功した記録は1つだけ使う（複数あれば最後のもの）。API のエラーで終わった記録は指標に入れず、件数を n_api_error に出す |
 | CI-B2 | post | `layout: refs_first` は [見本…, 検査対象, 指示]、`layout: target_first` は [検査対象, 指示, ref_note, 見本…] の順で、1通の user メッセージにする。ref_note は target_first のときだけ使える。topP は設定したときだけ送る |
 | CI-B1 | post | スロットリングなどの再試行できるエラーと、タイムアウト・接続の失敗は、指数バックオフで max_attempts まで試す。それでも失敗したら例外を投げずに api_error を返す。再試行できないエラーはすぐ api_error を返す |
+| CI-B3 | post | serviceTier は flex・priority なら常に送る。standard は `service_tier_explicit: true` のときだけ `{"type": "default"}` を送り、それ以外は送らない（11/11 までの記録と同じ）。知らない層の名前は設定の読み込みで ValueError。送った値を `service_tier_sent` に残す |
+| CI-B4 | post | `latency_s` は成功した1回の往復時間。`latency_total_s` は最初の試行の開始から戻るまで（失敗した試行と再試行の待ちを含む）。失敗した試行のエラーコードを順に `retry_errors` に残す（成功しても残す） |
 
 ## embed.py・embed_run.py（条件 E：埋め込み＋k近傍法）
 

@@ -22,6 +22,19 @@ models:
     model_id_source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html
     model_id_checked_on: "2026-11-05"
     note: 画像は解像度によらず1枚230トークンで課金（https://docs.aws.amazon.com/nova/latest/nova2-userguide/using-multimodal-models.html、2026-11-05 確認）。料金ページとの照合は未
+    recheck: "2026-11-16 に再確認（publicationDate 2026-11-11、effectiveDate 2026-11-01）。値は同じ"
+
+  - model_id: jp.amazon.nova-2-lite-v1:0       # 12/8 の記事：Flex 層（JP Geo、東京の単価 = regional の flex SKU）
+    service_tier: flex
+    input_per_mtok: 0.198                      # APN1-Nova2.0Lite-input-tokens-flex（Standard 0.396 の50%）
+    output_per_mtok: 1.6555                    # APN1-Nova2.0Lite-output-tokens-flex（Standard 3.311 の50%）
+    cache_read_per_mtok: 0.0495                # APN1-Nova2.0Lite-cache-read-input-token-count-flex
+    cache_write_per_mtok: 0.0                  # APN1-Nova2.0Lite-cache-write-input-token-count-flex
+    source_url: "AWS Price List API (AmazonBedrock, ap-northeast-1, publicationDate 2026-11-11, effectiveDate 2026-11-01)"
+    checked_on: "2026-11-16"
+    model_id_source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html
+    model_id_checked_on: "2026-11-16"
+    note: jp. の Flex が regional の flex SKU で課金されるという対応は、Geo は呼び出し元リージョンの単価という記述（cross-region-inference.html）からの推定。Cost Explorer の使用タイプで確かめる。料金ページとの照合は未
 
   - model_id: global.amazon.nova-2-lite-v1:0   # Global（東京から呼んだときの単価）
     service_tier: standard

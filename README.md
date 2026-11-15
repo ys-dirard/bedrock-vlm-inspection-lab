@@ -59,6 +59,8 @@ n_refs: 1                           # 見本の枚数（0 なら見本なし）
 model_id: jp.amazon.nova-2-lite-v1:0
 region: ap-northeast-1
 service_tier: standard              # standard / flex / priority
+service_tier_explicit: false        # true なら standard でも serviceTier={"type": "default"} を送る（応答に処理された層が返る）
+read_timeout_s: 120                 # 1回の呼び出しの読み取りタイムアウト（秒）
 prompt: prompts/v1_judge.txt
 image_long_edge: null               # null なら原寸。768 などにすると長辺をそろえて縮める
 inference: {temperature: 0, maxTokens: 300}
@@ -116,15 +118,15 @@ uv run vlmlab report runs/n1_A runs/n1_B runs/n1_C --out results --tag summary_2
 | --- | --- |
 | run_name, run_id, repeat | 実験名、実行 ID、何回目か |
 | image_id, category, label, path | 画像 ID、品目、正解（normal / anomaly）、画像のパス |
-| model_id, service_tier_requested, service_tier_resolved | モデル ID、頼んだ層、実際に処理された層（応答の serviceTier） |
+| model_id, service_tier_requested, service_tier_sent, service_tier_resolved | モデル ID、頼んだ層、Converse に送った serviceTier.type（standard を省略したときは null）、実際に処理された層（応答の serviceTier） |
 | prompt_version, n_refs, image_long_edge | プロンプトの版、見本の枚数、画像の縮小 |
 | raw_text | 応答の本文（そのまま） |
 | parsed, parse_error | 読み取った JSON（読めなければ null）、読めなかった理由 |
 | input_tokens, output_tokens, cache_read_tokens, cache_write_tokens | usage の値 |
-| latency_s, server_latency_ms | 呼び出しの往復時間（秒）、応答の metrics.latencyMs |
+| latency_s, latency_total_s, server_latency_ms | 成功した1回の往復時間（秒）、再試行と待ちを含む全体の時間（秒）、応答の metrics.latencyMs |
 | stop_reason | stopReason |
-| cost_usd | トークン数 × 単価 |
-| attempts, api_error | 試した回数、再試行しても失敗したときの内容 |
+| cost_usd, cost_tier | トークン数 × 単価、単価を引いた層（処理された層。応答に無ければ頼んだ層） |
+| attempts, api_error, retry_errors | 試した回数、再試行しても失敗したときの内容、失敗した試行ごとのエラーコード |
 | timestamp | 呼び出した時刻（JST） |
 
 使った設定とプロンプトの写しも `runs/<name>/` に残します。

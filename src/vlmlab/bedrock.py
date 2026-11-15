@@ -15,6 +15,8 @@ from .data import EncodedImage
 # 設定ファイルの層の名前 → Converse の serviceTier.type
 # https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html（2026-11-05 確認）
 SERVICE_TIERS = {"standard": "default", "flex": "flex", "priority": "priority"}
+# 応答の serviceTier.type → 設定ファイルの層の名前（費用の単価を引くときに使う）
+RESOLVED_TO_TIER = {v: k for k, v in SERVICE_TIERS.items()}
 
 # 画像と文の並べ方
 # - refs_first:   [見本…, 検査対象, 指示]（この基盤の既定）
@@ -44,6 +46,7 @@ class ModelRequest:
     layout: str = "refs_first"
     ref_note: str | None = None  # target_first のとき、見本の前に置く文
     service_tier: str = "standard"
+    service_tier_explicit: bool = False  # True なら standard でも serviceTier={"type": "default"} を送る（CI-B3）
     additional_fields: dict[str, Any] | None = None
 
 
@@ -55,10 +58,12 @@ class ModelResponse:
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
     latency_s: float | None = None  # 成功した1回の往復時間（再試行の待ちは含まない）
+    latency_total_s: float | None = None  # 最初の試行の開始から戻るまで（失敗した試行と待ちを含む。CI-B4）
     stop_reason: str | None = None
     service_tier_resolved: str | None = None
     attempts: int = 1
     api_error: str | None = None  # 再試行しても失敗したときの例外名と内容
+    retry_errors: list[str] = field(default_factory=list)  # 失敗した試行ごとのエラーコード（CI-B4）
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -88,6 +93,15 @@ def build_content(req: ModelRequest) -> list[dict[str, Any]]:
     raise ValueError(f"unknown layout {req.layout!r}; expected one of {LAYOUTS}")
 
 
+def service_tier_sent(service_tier: str, explicit: bool = False) -> str | None:
+    """Converse に送る serviceTier.type。standard は explicit のときだけ "default" を送り、ほかは送らない（CI-B3）。"""
+    if service_tier not in SERVICE_TIERS:
+        raise ValueError(f"unknown service_tier {service_tier!r}; expected one of {sorted(SERVICE_TIERS)}")
+    if service_tier == "standard" and not explicit:
+        return None
+    return SERVICE_TIERS[service_tier]
+
+
 def build_converse_kwargs(req: ModelRequest) -> dict[str, Any]:
     inference: dict[str, Any] = {"temperature": req.temperature, "maxTokens": req.max_tokens}
     if req.top_p is not None:
@@ -99,10 +113,9 @@ def build_converse_kwargs(req: ModelRequest) -> dict[str, Any]:
     }
     if req.system:
         kwargs["system"] = [{"text": req.system}]
-    if req.service_tier != "standard":
-        if req.service_tier not in SERVICE_TIERS:
-            raise ValueError(f"unknown service_tier {req.service_tier!r}")
-        kwargs["serviceTier"] = {"type": SERVICE_TIERS[req.service_tier]}
+    sent = service_tier_sent(req.service_tier, req.service_tier_explicit)
+    if sent is not None:
+        kwargs["serviceTier"] = {"type": sent}
     if req.additional_fields:
         kwargs["additionalModelRequestFields"] = req.additional_fields
     return kwargs
@@ -129,7 +142,8 @@ def response_from_converse(resp: dict[str, Any], latency_s: float, attempts: int
 class BedrockConverse:
     """Amazon Bedrock の Converse API で呼ぶ。"""
 
-    def __init__(self, region: str, max_attempts: int = 6, base_delay_s: float = 2.0, client: Any = None):
+    def __init__(self, region: str, max_attempts: int = 6, base_delay_s: float = 2.0, client: Any = None,
+                 read_timeout_s: int = 120):
         if client is None:
             import boto3
             from botocore.config import Config
@@ -137,7 +151,7 @@ class BedrockConverse:
             # 再試行はこちらで行い、レイテンシを1回ごとに測る
             client = boto3.client(
                 "bedrock-runtime", region_name=region,
-                config=Config(retries={"max_attempts": 1, "mode": "standard"}, read_timeout=120),
+                config=Config(retries={"max_attempts": 1, "mode": "standard"}, read_timeout=read_timeout_s),
             )
         self.client = client
         self.max_attempts = max_attempts
@@ -148,6 +162,8 @@ class BedrockConverse:
 
         kwargs = build_converse_kwargs(request)
         last_error = None
+        retry_errors: list[str] = []
+        t_start = time.perf_counter()
         for attempt in range(1, self.max_attempts + 1):
             t0 = time.perf_counter()
             try:
@@ -157,11 +173,18 @@ class BedrockConverse:
                 last_error = f"{code}: {e}"
                 retryable = code in RETRYABLE
             except BotoCoreError as e:  # 読み取りのタイムアウト、接続の失敗など
-                last_error = f"{type(e).__name__}: {e}"
+                code = type(e).__name__
+                last_error = f"{code}: {e}"
                 retryable = True
             else:
-                return response_from_converse(resp, time.perf_counter() - t0, attempt)
+                t_end = time.perf_counter()
+                out = response_from_converse(resp, t_end - t0, attempt)
+                out.latency_total_s = t_end - t_start
+                out.retry_errors = retry_errors
+                return out
+            retry_errors.append(code)
             if not retryable or attempt == self.max_attempts:
                 break
             time.sleep(self.base_delay_s * 2 ** (attempt - 1) * (0.5 + random.random()))
-        return ModelResponse(raw_text=None, attempts=attempt, api_error=last_error)
+        return ModelResponse(raw_text=None, attempts=attempt, api_error=last_error,
+                             latency_total_s=time.perf_counter() - t_start, retry_errors=retry_errors)
