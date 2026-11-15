@@ -20,7 +20,7 @@ import yaml
 
 from .bedrock import LAYOUTS, ModelRequest, ModelResponse, VisionModel
 from .cost import BudgetExceeded, BudgetGuard, PricingTable, call_cost
-from .data import EncodedImage, load_image
+from .data import EncodedImage, load_image, load_tiles
 from .parse import ParseSpec, parse_response
 
 JST = timezone(timedelta(hours=9))
@@ -40,6 +40,7 @@ class RunConfig:
     prompt_vars: dict[str, dict[str, str]] = field(default_factory=dict)  # 品目ごとの差し替え {{key}}
     service_tier: str = "standard"
     image_long_edge: int | None = None
+    tile_grid: int | None = None  # 2 なら検査対象を 2×2 に分けて4枚で渡す（見本は分けない）。null なら分けない
     layout: str = "refs_first"  # 画像と文の並べ方（bedrock.LAYOUTS）
     ref_note: str | None = None  # layout=target_first のとき、見本の前に置く文
     inference: dict[str, Any] = field(default_factory=lambda: {"temperature": 0, "maxTokens": 300})
@@ -62,6 +63,10 @@ class RunConfig:
             raise ValueError(f"layout must be one of {LAYOUTS}")
         if cfg.ref_note and cfg.layout != "target_first":
             raise ValueError("ref_note is only used with layout 'target_first'")
+        if cfg.tile_grid is not None and cfg.tile_grid < 2:
+            raise ValueError("tile_grid must be null or >= 2")
+        if cfg.tile_grid is not None and cfg.layout != "refs_first":
+            raise ValueError("tile_grid is only supported with layout 'refs_first'")
         unknown_inf = set(cfg.inference) - {"temperature", "maxTokens", "topP"}
         if unknown_inf:
             raise ValueError(f"unknown inference keys: {sorted(unknown_inf)} (topK などは additional_fields に書く)")
@@ -70,6 +75,23 @@ class RunConfig:
     @property
     def prompt_version(self) -> str:
         return Path(self.prompt).stem
+
+    @property
+    def images_per_call(self) -> int:
+        return self.n_refs + (self.tile_grid ** 2 if self.tile_grid else 1)
+
+
+# 1回の呼び出しで、リクエストに埋め込んで渡せる画像の枚数の上限（CI-R4）
+# Nova 2 Lite: https://docs.aws.amazon.com/nova/latest/nova2-userguide/using-multimodal-models.html
+#   「Supported content type by modality」の表。Image を埋め込みで渡すとき 25 MB・5 枚（2026-11-16 確認）
+MAX_EMBEDDED_IMAGES = {"amazon.nova-2-lite": 5}
+
+
+def max_embedded_images(model_id: str) -> int | None:
+    for key, n in MAX_EMBEDDED_IMAGES.items():
+        if key in model_id:
+            return n
+    return None
 
 
 def fill_template(text: str, values: dict[str, str]) -> str:
@@ -121,6 +143,9 @@ def plan_run(cfg: RunConfig, base_dir: Path, runs_dir: Path, limit: int | None =
     for cat in items.category.unique():
         for text in filter(None, [prompt_text, system_text]):
             fill_template(text, cfg.prompt_vars.get(cat, {}))
+    limit_images = max_embedded_images(cfg.model_id)
+    if limit_images is not None and cfg.images_per_call > limit_images:
+        raise ValueError(f"{cfg.images_per_call} images per call exceeds the limit {limit_images} for {cfg.model_id}")
     run_name = cfg.name if limit is None else f"{cfg.name}__trial{limit}"
     return RunPlan(cfg, run_name, runs_dir / run_name, items, refs_by_cat)
 
@@ -159,6 +184,11 @@ def execute(
             image_cache[rel] = load_image(visa_root / rel, cfg.image_long_edge)
         return image_cache[rel]
 
+    def target(rel: str) -> list[EncodedImage]:
+        if cfg.tile_grid:  # CI-R5: 検査対象だけを分け、見本は1枚のまま
+            return load_tiles(visa_root / rel, cfg.tile_grid, cfg.image_long_edge)
+        return [img(rel)]
+
     n_called = n_skipped = 0
     stopped = None
     with jsonl.open("a", encoding="utf-8") as f:
@@ -175,7 +205,7 @@ def execute(
                 vars_ = cfg.prompt_vars.get(row.category, {})
                 req = ModelRequest(
                     model_id=cfg.model_id,
-                    images=[img(p) for p in plan.refs_by_cat.get(row.category, [])] + [img(row.path)],
+                    images=[img(p) for p in plan.refs_by_cat.get(row.category, [])] + target(row.path),
                     text=fill_template(prompt_text, vars_),
                     system=fill_template(system_text, vars_) if system_text else None,
                     temperature=cfg.inference.get("temperature", 0),
@@ -222,6 +252,7 @@ def call_identity(cfg: RunConfig, prompt_text: str, system_text: str | None) -> 
         "prompt_sha": prompt_sha,
         "n_refs": cfg.n_refs,
         "image_long_edge": cfg.image_long_edge,
+        "tile_grid": cfg.tile_grid,
         "temperature": cfg.inference.get("temperature", 0),
         "max_tokens": cfg.inference.get("maxTokens", 300),
         "top_p": cfg.inference.get("topP"),

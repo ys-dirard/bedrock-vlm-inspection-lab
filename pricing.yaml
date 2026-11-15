@@ -17,10 +17,10 @@ models:
     output_per_mtok: 3.311                     # APN1-Nova2.0Lite-output-tokens
     cache_read_per_mtok: 0.099                 # APN1-Nova2.0Lite-cache-read-input-token-count
     cache_write_per_mtok: 0.0                  # APN1-Nova2.0Lite-cache-write-input-token-count
-    source_url: "AWS Price List API (AmazonBedrock, ap-northeast-1, publicationDate 2026-11-02)"
-    checked_on: "2026-11-05"
+    source_url: "AWS Price List API (AmazonBedrock, ap-northeast-1, publicationDate 2026-11-02; 2026-11-16 に publicationDate 2026-11-11T01:30:37Z の版で同じ値を確認)"
+    checked_on: "2026-11-16"
     model_id_source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html
-    model_id_checked_on: "2026-11-05"
+    model_id_checked_on: "2026-11-16"            # aws bedrock list-inference-profiles --region ap-northeast-1 で ACTIVE
     note: 画像は解像度によらず1枚230トークンで課金（https://docs.aws.amazon.com/nova/latest/nova2-userguide/using-multimodal-models.html、2026-11-05 確認）。料金ページとの照合は未
 
   - model_id: global.amazon.nova-2-lite-v1:0   # Global（東京から呼んだときの単価）
@@ -58,10 +58,10 @@ models:
     output_per_mtok: 5.50                      # APN1-MP:APN1_OutputTokenCount-Units
     cache_read_per_mtok: null
     cache_write_per_mtok: null
-    source_url: "AWS Price List API (AmazonBedrockFoundationModels, ap-northeast-1, publicationDate 2026-10-12)"
-    checked_on: "2026-11-05"
-    model_id_source: "aws bedrock list-inference-profiles --region ap-northeast-1（2026-11-05）"
-    model_id_checked_on: "2026-11-05"
+    source_url: "AWS Price List API (AmazonBedrockFoundationModels, ap-northeast-1, publicationDate 2026-10-12; 2026-11-16 に版 20261109224312 で同じ値を確認)"
+    checked_on: "2026-11-16"
+    model_id_source: "aws bedrock list-inference-profiles --region ap-northeast-1（2026-11-16 に ACTIVE を確認）"
+    model_id_checked_on: "2026-11-16"
     note: 料金ページとの照合は未
 
   - model_id: jp.anthropic.claude-haiku-4-5-20251001-v1:0

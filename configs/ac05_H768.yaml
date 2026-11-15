@@ -1,0 +1,16 @@
+# 12/5 の記事：Claude Haiku 4.5、見本1枚＋検査対象、長辺 768px。plan.md の手順3（image_long_edge だけを変える）
+name: ac05_H768
+split: data/splits/visa_test_200.csv
+refs: data/splits/visa_refs.csv
+n_refs: 1
+model_id: jp.anthropic.claude-haiku-4-5-20251001-v1:0   # JP Geo（東京の単価、オンデマンド）
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v1_judge.txt
+image_long_edge: 768                 # 見本・検査対象とも長辺をそろえて縮める（原寸がこれ以下なら原寸のまま）
+inference: {temperature: 0, maxTokens: 300}
+repeats: 1
+budget_usd: 0.7                       # 200回の見込みの約1.5倍（plan.md の上限 6 USD の内側）
+parse:
+  allow_code_fence: true            # n3_claude_refB（11/26、Claude）と同じ読み取り規則
+  allow_trailing_code_fence: true

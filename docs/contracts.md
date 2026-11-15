@@ -54,7 +54,7 @@
 
 | ID | 種類 | 条件 |
 | --- | --- | --- |
-| CI-R1 | pre | 再開のとき、呼び出しの中身を決める設定（モデル ID、層、プロンプトの版と中身のハッシュ、見本の枚数、縮小、temperature、maxTokens、topP、layout、ref_note、additional_fields）が前の記録と1つでも違えば、呼ぶ前に止める。読み取りの設定（parse）は後から変えてよい |
+| CI-R1 | pre | 再開のとき、呼び出しの中身を決める設定（モデル ID、層、プロンプトの版と中身のハッシュ、見本の枚数、縮小、分割（tile_grid）、temperature、maxTokens、topP、layout、ref_note、additional_fields）が前の記録と1つでも違えば、呼ぶ前に止める。読み取りの設定（parse）は後から変えてよい |
 | CI-R2 | pre | 品目ごとの差し替え（prompt_vars）が足りない品目があれば、最初の呼び出しの前に止める |
 | CI-R3 | post | (image_id, repeat) ごとに、成功した記録は1つだけ使う（複数あれば最後のもの）。API のエラーで終わった記録は指標に入れず、件数を n_api_error に出す |
 | CI-B2 | post | `layout: refs_first` は [見本…, 検査対象, 指示]、`layout: target_first` は [検査対象, 指示, ref_note, 見本…] の順で、1通の user メッセージにする。ref_note は target_first のときだけ使える。topP は設定したときだけ送る |
@@ -93,6 +93,23 @@
 | CI-K10 | post | 直った・悪くなった：回した画像のうち、1段目の判定と Claude の判定がどちらも有効なものについて、直った = 1段目が不正解で Claude が正解、悪くなった = 1段目が正解で Claude が不正解。変わらない（両方正解・両方不正解）の数も出す |
 | CI-K11 | post | 確信度の帯：nova_conf で [0, 0.5)、[0.5, 0.7)、[0.7, 0.9)、[0.9, 1.0] に分け、件数と nova_pred の正解率を出す。nova_pred が None の画像は件数に入れ、正解率の分母から除く。件数 0 の帯の正解率は None |
 | CI-K12 | post | 業務指標（CI-M6 の計算を使う）：画像ごとのスコアは、Nova だけ = 有効な回の D1 スコアの平均、Claude だけ = Claude の D1 スコア、段階判定 = 回して Claude が有効なら Claude の D1 スコア、それ以外は1段目のスコア（R1〜R5 は Nova のスコア、R6 は 0）。「一番よかった段階判定」は F1 が最大の条件（同じなら1,000枚あたりの費用が安いほう） |
+
+## 画像の分割と欠陥の大きさ（12/5 の記事：画像の大きさ・分割と精度・費用）
+
+目的：同じ画像を「長辺を縮めて1枚で渡す（Claude Haiku 4.5）」「原寸を 2×2 に分けて4枚で渡す（Nova 2 Lite）」で比べ、欠陥の大きさ別に再現率を見る。
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-T1 | post | `grid_boxes(w, h, n)` は n×n 個の枠 (left, top, right, bottom) を行優先（左上・右上・左下・右下）で返す |
+| CI-T2 | post | 枠は重ならず、画像の全画素をちょうど1回ずつ覆う。左・上の列と行の幅・高さは w // n・h // n で、端数は右の列と下の行に入る |
+| CI-T3 | pre | n < 1、または w か h が n より小さいときは ValueError |
+| CI-T4 | post | `load_tiles` は原寸の画像から CI-T1 の順に切り出し、各タイルを JPEG（quality=95）で符号化する。`long_edge` を指定したときだけ、切り出したあとで各タイルの長辺をそろえて縮める（拡大はしない） |
+| CI-S1 | post | 欠陥の画素数は、正解マスク（グレースケールに直したもの）で 0 より大きい画素の数。VisA のマスクは欠陥が 1（または欠陥ごとの番号）なので、値の大きさは問わない |
+| CI-S2 | post | 区分は、欠陥の面積の割合の小さい順（同じ値は image_id の順）に並べた i 番目（0 始まり）を floor(i × 3 / N) の区分（small・medium・large）に入れる。100枚なら 34・33・33。入力の行の順に依らない。空の表や割合の欠けは ValueError |
+| CI-S3 | post | 対象は split の不良品だけ。割合 = 欠陥の画素数 / マスクの全画素数（小数9桁に丸める）。マスクは split_csv/1cls.csv の mask 列を、画像のパスで引く |
+| CI-S4 | pre | マスクが無い、マスクと画像の大きさが違う、欠陥の画素が 0 のときは ValueError（黙って区分しない） |
+| CI-R4 | pre | 1回の呼び出しの画像の枚数（見本 + 検査対象、分けるならタイルの数）が、モデルの上限を超える設定は、呼ぶ前に止める。上限は Nova 2 Lite の埋め込みで5枚（[Nova 2 のユーザーガイド](https://docs.aws.amazon.com/nova/latest/nova2-userguide/using-multimodal-models.html)、2026-11-16 確認）。上限の分からないモデルは確かめない |
+| CI-R5 | post | `tile_grid: n` のとき、見本は分けずに渡し、検査対象だけを CI-T4 で n×n に分けて、[見本…, タイル（左上・右上・左下・右下）, 指示] の順に1通のメッセージにする。tile_grid は呼び出しの中身を決める設定に入れ（CI-R1）、記録に残す。layout は refs_first だけ |
 
 ## 前提（assumption）
 

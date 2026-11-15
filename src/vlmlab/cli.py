@@ -2,6 +2,7 @@
 
   vlmlab fetch                         VisA の tar を取得して展開する（認証なし）
   vlmlab splits                        data/splits/ の CSV を作る
+  vlmlab defect-size                   不良品の欠陥の大きさ（正解マスクの面積の割合）で小・中・大に分ける（12/5 の記事）
   vlmlab run CONFIG [--limit N] [--dry-run]
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
@@ -36,6 +37,11 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("splits")
     s.add_argument("--visa-root", default="data/visa")
     s.add_argument("--out", default="data/splits")
+
+    ds = sub.add_parser("defect-size", help="不良品を欠陥の面積の割合で小・中・大に3等分する（12/5 の記事）")
+    ds.add_argument("--visa-root", default="data/visa")
+    ds.add_argument("--split", default="data/splits/visa_test_200.csv")
+    ds.add_argument("--out", default="data/splits/visa_test_200_defect_size.csv")
 
     r = sub.add_parser("run")
     r.add_argument("config")
@@ -108,6 +114,16 @@ def main(argv: list[str] | None = None) -> None:
         from .data import write_splits
         for k, v in write_splits(ROOT / a.visa_root, ROOT / a.out).items():
             print(f"{k}: {v}")
+    elif a.cmd == "defect-size":
+        import pandas as pd
+        from .data import SIZE_BINS, make_defect_size_table
+        table = make_defect_size_table(ROOT / a.visa_root, pd.read_csv(ROOT / a.split))
+        out = ROOT / a.out
+        table.to_csv(out, index=False, lineterminator="\n")
+        print(f"defect_size: {out} ({len(table)} images)")
+        order = list(SIZE_BINS)
+        print(table.groupby("size_bin")["defect_area_ratio"].agg(["count", "min", "max"]).reindex(order).to_string())
+        print(table.groupby(["size_bin", "category"]).size().unstack(fill_value=0).reindex(order).to_string())
     elif a.cmd == "run":
         from .cost import PricingTable
         from .run import RunConfig, plan_run
@@ -119,6 +135,8 @@ def main(argv: list[str] | None = None) -> None:
             print(json.dumps({
                 "run_name": plan.run_name, "n_images": len(plan.items), "repeats": cfg.repeats,
                 "calls": len(plan.items) * cfg.repeats, "refs_per_image": cfg.n_refs,
+                "images_per_call": cfg.images_per_call, "tile_grid": cfg.tile_grid,
+                "image_long_edge": cfg.image_long_edge,
                 "price_known": price.runnable, "out_dir": str(plan.out_dir),
                 "by_group": plan.items.groupby(["category", "label"]).size().to_dict().__repr__(),
             }, ensure_ascii=False, indent=2))

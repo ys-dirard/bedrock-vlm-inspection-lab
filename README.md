@@ -102,6 +102,16 @@ uv run vlmlab embed configs/n1_E.yaml               # 学習用240枚とテス�
 - 判定は `calls.jsonl`（ほかの条件と同じ形）に書くので、`vlmlab report` でそのまま集計できます。費用はテスト画像1枚の埋め込みの値で、学習用画像の費用は `summary.json` の `index_cost_usd` に分けて書きます
 - 費用は画像1枚あたりの単価（`pricing.yaml` の `per_image_usd`）で数えます。応答ヘッダーの入力トークン数は、画像では 0 になるので費用には使いません
 
+### 画像の分割と欠陥の大きさ（12/5 の記事）
+
+```bash
+uv run vlmlab defect-size     # data/splits/visa_test_200_defect_size.csv（不良品100枚を欠陥の面積の割合で小・中・大に3等分）
+```
+
+- 設定に `tile_grid: 2` と書くと、検査対象を原寸のまま 2×2 に分け（重なりなし。端数は右と下のタイルに入る）、[見本, 左上, 右上, 左下, 右下, 指示] の順で渡します。見本は分けません
+- 1回の画像の枚数がモデルの上限を超える設定は、呼ぶ前に止めます（Nova 2 Lite は埋め込みで5枚まで）
+- 契約は [docs/contracts.md](docs/contracts.md) の CI-T*・CI-S*・CI-R4・CI-R5
+
 ### 3. 集計
 
 ```bash
