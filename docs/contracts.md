@@ -109,6 +109,7 @@
 | CI-S3 | post | 対象は split の不良品だけ。割合 = 欠陥の画素数 / マスクの全画素数（小数9桁に丸める）。マスクは split_csv/1cls.csv の mask 列を、画像のパスで引く |
 | CI-S4 | pre | マスクが無い、マスクと画像の大きさが違う、欠陥の画素が 0 のときは ValueError（黙って区分しない） |
 | CI-R4 | pre | 1回の呼び出しの画像の枚数（見本 + 検査対象、分けるならタイルの数）が、モデルの上限を超える設定は、呼ぶ前に止める。上限は Nova 2 Lite の埋め込みで5枚（[Nova 2 のユーザーガイド](https://docs.aws.amazon.com/nova/latest/nova2-userguide/using-multimodal-models.html)、2026-11-16 確認）。上限の分からないモデルは確かめない |
+| CI-M11 | post | `recall_by_bin`：1回分の記録の不良品について、区分ごと（category=all）と区分×品目ごとに TP（NG）・FN（OK）・再現率 = TP/(TP+FN) を出す。解析失敗は分母から除いて n_parse_fail に、区分表にあって記録の無い画像は n_missing に数える。分母が 0 なら再現率は空（None。表では NaN、CSV では空欄）。区分の無い不良品・知らない区分・2回以上の繰り返しは ValueError |
 | CI-R5 | post | `tile_grid: n` のとき、見本は分けずに渡し、検査対象だけを CI-T4 で n×n に分けて、[見本…, タイル（左上・右上・左下・右下）, 指示] の順に1通のメッセージにする。tile_grid は呼び出しの中身を決める設定に入れ（CI-R1）、記録に残す。layout は refs_first だけ |
 
 ## 前提（assumption）

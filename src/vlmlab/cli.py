@@ -43,6 +43,12 @@ def main(argv: list[str] | None = None) -> None:
     ds.add_argument("--split", default="data/splits/visa_test_200.csv")
     ds.add_argument("--out", default="data/splits/visa_test_200_defect_size.csv")
 
+    bs = sub.add_parser("by-size", help="欠陥の大きさの区分ごとの再現率（12/5 の記事。API は呼ばない）")
+    bs.add_argument("run_dirs", nargs="+")
+    bs.add_argument("--sizes", default="data/splits/visa_test_200_defect_size.csv")
+    bs.add_argument("--repeat", type=int, default=1, help="繰り返しのある実験は、この回だけを使う")
+    bs.add_argument("--out", required=True, help="出力の CSV")
+
     r = sub.add_parser("run")
     r.add_argument("config")
     r.add_argument("--limit", type=int, default=None, help="試運転の枚数（runs/<name>__trial<N>/ に出す）")
@@ -124,6 +130,22 @@ def main(argv: list[str] | None = None) -> None:
         order = list(SIZE_BINS)
         print(table.groupby("size_bin")["defect_area_ratio"].agg(["count", "min", "max"]).reindex(order).to_string())
         print(table.groupby(["size_bin", "category"]).size().unstack(fill_value=0).reindex(order).to_string())
+    elif a.cmd == "by-size":
+        import pandas as pd
+        from .data import SIZE_BINS
+        from .metrics import recall_by_bin
+        from .report import load_run
+        sizes = pd.read_csv(ROOT / a.sizes)
+        parts = []
+        for rd in a.run_dirs:
+            df = load_run(rd)
+            df = df[df["repeat"] == a.repeat]
+            t = recall_by_bin(df, sizes, SIZE_BINS)
+            t.insert(0, "run_name", df["run_name"].iloc[0])
+            parts.append(t)
+        out = pd.concat(parts, ignore_index=True)
+        out.to_csv(ROOT / a.out, index=False, lineterminator="\n")
+        print(out[out.category == "all"].to_string(index=False))
     elif a.cmd == "run":
         from .cost import PricingTable
         from .run import RunConfig, plan_run

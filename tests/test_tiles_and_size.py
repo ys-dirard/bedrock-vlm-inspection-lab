@@ -186,3 +186,39 @@ def test_tile_grid_config_validation(lab):  # noqa: F811
         _tile_cfg(base, tile_grid=1)
     with pytest.raises(ValueError):
         _tile_cfg(base, layout="target_first")
+
+
+# ---- 区分ごとの再現率 ----
+
+def _rec(image_id, cat, label, pred, repeat=1):
+    return {"image_id": image_id, "category": cat, "label": label, "pred": pred, "repeat": repeat}
+
+
+def test_recall_by_bin_counts_and_parse_fail():
+    """CI-M11: 区分ごと・区分×品目ごとの TP/FN/再現率。解析失敗は分母から除き、記録の無い画像は n_missing。良品は数えない。"""
+    from vlmlab.metrics import recall_by_bin
+    bins = pd.DataFrame({"image_id": ["a", "b", "c", "d", "e"], "category": ["p", "p", "q", "q", "q"],
+                         "size_bin": ["small", "small", "small", "large", "large"]})
+    df = pd.DataFrame([_rec("a", "p", "anomaly", "NG"), _rec("b", "p", "anomaly", "OK"),
+                       _rec("c", "q", "anomaly", None), _rec("d", "q", "anomaly", "NG"),
+                       _rec("n", "q", "normal", "NG")])  # e は記録なし
+    t = recall_by_bin(df, bins, ("small", "medium", "large")).set_index(["category", "size_bin"])
+    assert t.loc[("all", "small")][["n_anomaly", "n_valid", "tp", "fn", "n_parse_fail", "n_missing"]].tolist() == [3, 2, 1, 1, 1, 0]
+    assert t.loc[("all", "small"), "recall"] == 0.5
+    assert t.loc[("all", "large")][["n_anomaly", "tp", "n_missing"]].tolist() == [2, 1, 1]
+    assert t.loc[("all", "large"), "recall"] == 1.0
+    assert t.loc[("all", "medium"), "n_anomaly"] == 0 and pd.isna(t.loc[("all", "medium"), "recall"])
+    assert t.loc[("p", "small"), "recall"] == 0.5 and pd.isna(t.loc[("q", "small"), "recall"])
+
+
+def test_recall_by_bin_rejects_bad_input():
+    """CI-M11: 区分の無い不良品、知らない区分、2回以上の繰り返しは ValueError。"""
+    from vlmlab.metrics import recall_by_bin
+    bins = pd.DataFrame({"image_id": ["a"], "category": ["p"], "size_bin": ["small"]})
+    with pytest.raises(ValueError, match="without a bin"):
+        recall_by_bin(pd.DataFrame([_rec("z", "p", "anomaly", "NG")]), bins, ("small",))
+    with pytest.raises(ValueError, match="unknown bins"):
+        recall_by_bin(pd.DataFrame([_rec("a", "p", "anomaly", "NG")]), bins, ("large",))
+    with pytest.raises(ValueError, match="single repeat"):
+        recall_by_bin(pd.DataFrame([_rec("a", "p", "anomaly", "NG", 1), _rec("a", "p", "anomaly", "NG", 2)]),
+                      bins, ("small",))

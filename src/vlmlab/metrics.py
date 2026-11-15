@@ -180,3 +180,34 @@ def token_stats(df: pd.DataFrame) -> dict[str, Any]:
             s = df[k].dropna()
             out[f"{k}_mean"] = float(s.mean()) if len(s) else None
     return out
+
+
+def recall_by_bin(df: pd.DataFrame, bins: pd.DataFrame, order: tuple[str, ...]) -> pd.DataFrame:
+    """不良品の再現率を、区分（例 欠陥の大きさ）ごと、区分×品目ごとに出す（CI-M11）。
+
+    df は1実験の記録（1回分。repeat が2つ以上なら ValueError）。bins は image_id と size_bin の列を持つ表。
+    解析失敗（pred が None）は再現率の分母から除き、件数を n_parse_fail に出す。記録の無い不良品は n_missing。
+    """
+    validate(df)
+    if df["repeat"].nunique() > 1:
+        raise ValueError("recall_by_bin expects a single repeat")
+    anomalies = df[df["label"] == "anomaly"]
+    unknown = set(anomalies["image_id"]) - set(bins["image_id"])
+    if unknown:
+        raise ValueError(f"anomaly images without a bin: {sorted(unknown)[:5]}")
+    if set(bins["size_bin"]) - set(order):
+        raise ValueError(f"unknown bins {sorted(set(bins['size_bin']) - set(order))}")
+    merged = bins.merge(anomalies[["image_id", "pred"]], on="image_id", how="left", indicator=True)
+    rows = []
+    groups = [("all", merged)] + [(c, g) for c, g in merged.groupby("category", sort=True)]
+    for cat, g in groups:
+        for b in order:
+            s = g[g["size_bin"] == b]
+            present = s[s["_merge"] == "both"]
+            valid = present[present["pred"].notna()]
+            tp = int((valid["pred"] == "NG").sum())
+            fn = int((valid["pred"] == "OK").sum())
+            rows.append({"category": cat, "size_bin": b, "n_anomaly": int(len(s)), "n_valid": int(len(valid)),
+                         "tp": tp, "fn": fn, "n_parse_fail": int(len(present) - len(valid)),
+                         "n_missing": int(len(s) - len(present)), "recall": _div(tp, tp + fn)})
+    return pd.DataFrame(rows)
