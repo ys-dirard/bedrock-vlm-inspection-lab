@@ -6,6 +6,7 @@
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
+  vlmlab prefilter --scores NAME=RUN... --nova RUN --out DIR   2段構成を記録から計算する（12/10 の記事。API は呼ばない）
   vlmlab anomalydino CONFIG [--limit N]  手元の AnomalyDINO で異常度を出す（12/10 の記事。AWS は使わない。uv sync --extra anomalydino）
 
   MMAD（11/19 の記事）
@@ -73,6 +74,12 @@ def main(argv: list[str] | None = None) -> None:
     ad.add_argument("--runs-dir", default="runs")
     ad.add_argument("--anomalydino-root", default="third_party/AnomalyDINO", help="公式実装の clone")
     ad.add_argument("--torch-home", default="data/torch_home", help="DINOv2 の重みと hub のコードの置き場（TORCH_HOME）")
+
+    pf = sub.add_parser("prefilter", help="2段構成：AnomalyDINO で絞り、上位だけ Nova に回す（12/10 の記事。API は呼ばない）")
+    pf.add_argument("--scores", nargs="+", required=True,
+                    help="解像度の名前=AnomalyDINO の実験（先頭が主）。例 448=runs/ad1_anomalydino")
+    pf.add_argument("--nova", required=True, help="Nova の実験（例 runs/n1_B）")
+    pf.add_argument("--out", required=True)
 
     m = sub.add_parser("mmad", help="MMAD の選択式の問題（11/19 の記事）")
     msub = m.add_subparsers(dest="mcmd", required=True)
@@ -153,6 +160,20 @@ def main(argv: list[str] | None = None) -> None:
     elif a.cmd == "report":
         from .report import build_report
         for k, v in build_report(a.run_dirs, a.out, a.tag).items():
+            print(f"{k}: {v}")
+    elif a.cmd == "prefilter":
+        from .prefilter import load_scores, run_prefilter, time_summary
+        from .prefilter_report import write_outputs
+        from .report import load_run
+        from .run import load_jsonl
+        nova = load_run(a.nova)
+        results, ad_runs, times = {}, {}, {}
+        for spec in a.scores:
+            name, run_dir = spec.split("=", 1)
+            ad_runs[name] = load_scores(run_dir)
+            results[name] = run_prefilter(ad_runs[name], nova)
+            times[name] = time_summary(ad_runs[name], load_jsonl(Path(run_dir) / "meta.jsonl"))
+        for k, v in write_outputs(results, ad_runs, times, a.out).items():
             print(f"{k}: {v}")
     elif a.cmd == "anomalydino":
         import os
