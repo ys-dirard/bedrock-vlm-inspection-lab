@@ -56,6 +56,7 @@ def binary_metrics(df: pd.DataFrame) -> dict[str, Any]:
     else:
         f1 = 2 * precision * recall / (precision + recall)
     n_fail = n_total - int(valid_mask.sum())
+    accuracy = _div(tp + tn, tp + fp + tn + fn)  # CI-Y3
     return {
         "n_total": n_total,
         "n_valid": int(valid_mask.sum()),
@@ -70,6 +71,7 @@ def binary_metrics(df: pd.DataFrame) -> dict[str, Any]:
         "f1": f1,
         "false_positive_rate": _div(fp, fp + tn),
         "miss_rate": _div(fn, tp + fn),
+        "accuracy": accuracy,
     }
 
 
@@ -104,24 +106,32 @@ def anomaly_score(pred: str, confidence: float) -> float:
     return round(confidence if pred == "NG" else 1.0 - confidence, SCORE_DIGITS)
 
 
-def pass_rate_at_miss(df: pd.DataFrame, target_miss_rate: float) -> dict[str, Any]:
-    """見逃し率を target 以下にしたときの良品の通過率（CI-M6、CI-M7）。
+def _validate_scores(scores: Any, labels: Any) -> tuple[np.ndarray, np.ndarray]:
+    """CI-Y1。"""
+    s = np.asarray(list(scores), dtype=float)
+    lab = list(labels)
+    if len(s) != len(lab):
+        raise ValueError(f"scores and labels differ in length: {len(s)} vs {len(lab)}")
+    bad = set(map(str, lab)) - LABELS
+    if bad:
+        raise ValueError(f"unexpected label values: {sorted(bad)}")
+    if len(s) and not np.isfinite(s).all():
+        raise ValueError("scores must be finite numbers")
+    return s, np.array([x == "anomaly" for x in lab], dtype=bool)
 
-    スコアが t 以上を NG とみなす。見逃し率が target 以下になる最大の t を選ぶ。
+
+def pass_rate_at_miss_scores(scores: Any, labels: Any, target_miss_rate: float) -> dict[str, Any]:
+    """任意のスコアで、見逃し率を target 以下にしたときの良品の通過率（CI-Y2。規則は CI-M6 と同じ）。
+
+    スコアが t 以上を NG とみなす。見逃し率が target 以下になる最大の t を選ぶ。スコアが t と同じ良品は通さない。
     """
-    validate(df)
-    v = df[~df["pred"].map(_is_missing)]
+    s, is_anom = _validate_scores(scores, labels)
+    s_anom, s_norm = s[is_anom], s[~is_anom]
     base = {"target_miss_rate": target_miss_rate, "threshold": None, "pass_rate": None,
-            "achieved_miss_rate": None, "n_normal": 0, "n_anomaly": 0, "reason": None}
-    if v["confidence"].map(_is_missing).any():
-        return {**base, "reason": "confidence missing in some valid responses"}
-    scores = np.array([anomaly_score(p, float(c)) for p, c in zip(v["pred"], v["confidence"])])
-    is_anom = (v["label"] == "anomaly").to_numpy()
-    s_anom, s_norm = scores[is_anom], scores[~is_anom]
-    base.update(n_normal=len(s_norm), n_anomaly=len(s_anom))
+            "achieved_miss_rate": None, "n_normal": int(len(s_norm)), "n_anomaly": int(len(s_anom)),
+            "n_normal_passed": None, "reason": None}
     if len(s_anom) == 0 or len(s_norm) == 0:
         return {**base, "reason": "no anomaly or no normal samples"}
-
     # 候補のしきい値は不良品のスコアの値。t を上げるほど通過は増え、見逃しも増える。
     best = None
     for t in sorted(set(s_anom.tolist())):
@@ -131,7 +141,58 @@ def pass_rate_at_miss(df: pd.DataFrame, target_miss_rate: float) -> dict[str, An
     if best is None:  # 最小の t では見逃しが 0 なので、ここには来ない
         return {**base, "reason": "no threshold satisfies target"}
     t, miss = best
-    return {**base, "threshold": t, "pass_rate": float((s_norm < t).mean()), "achieved_miss_rate": miss}
+    n_pass = int((s_norm < t).sum())
+    return {**base, "threshold": t, "pass_rate": n_pass / len(s_norm), "achieved_miss_rate": miss,
+            "n_normal_passed": n_pass}
+
+
+def pass_rate_at_miss(df: pd.DataFrame, target_miss_rate: float) -> dict[str, Any]:
+    """見逃し率を target 以下にしたときの良品の通過率（CI-M6、CI-M7）。スコアは D1。"""
+    validate(df)
+    v = df[~df["pred"].map(_is_missing)]
+    if v["confidence"].map(_is_missing).any():
+        return {"target_miss_rate": target_miss_rate, "threshold": None, "pass_rate": None,
+                "achieved_miss_rate": None, "n_normal": int((v["label"] == "normal").sum()),
+                "n_anomaly": int((v["label"] == "anomaly").sum()), "n_normal_passed": None,
+                "reason": "confidence missing in some valid responses"}
+    scores = [anomaly_score(p, float(c)) for p, c in zip(v["pred"], v["confidence"])]
+    return pass_rate_at_miss_scores(scores, v["label"].tolist(), target_miss_rate)
+
+
+def operating_points(scores: Any, labels: Any) -> pd.DataFrame:
+    """しきい値ごとの見逃し率と良品の通過率（CI-Y5）。候補は全スコアの異なる値と +∞。"""
+    s, is_anom = _validate_scores(scores, labels)
+    s_anom, s_norm = s[is_anom], s[~is_anom]
+    rows = []
+    for t in sorted(set(s.tolist())) + [math.inf]:
+        rows.append({
+            "threshold": t,
+            "miss_rate": float((s_anom < t).mean()) if len(s_anom) else None,
+            "pass_rate": float((s_norm < t).mean()) if len(s_norm) else None,
+        })
+    return pd.DataFrame(rows)
+
+
+def ng_counts(df: pd.DataFrame, n_repeats: int = 3) -> tuple[pd.DataFrame, list[str]]:
+    """画像ごとの「NG と言った回数」（CI-Y4）。どれかの回が解析失敗の画像は除く（Y-D2）。
+
+    戻り値: (image_id を索引にした表[label, ng_count], 除いた image_id のリスト)
+    """
+    validate(df)
+    rows, excluded = [], []
+    for image_id, g in df.groupby("image_id", sort=True):
+        reps = sorted(g["repeat"].tolist())
+        if reps != list(range(1, n_repeats + 1)):
+            raise ValueError(f"{image_id}: repeats must be 1..{n_repeats} exactly once, got {reps}")
+        labels = g["label"].unique()
+        if len(labels) != 1:
+            raise ValueError(f"{image_id}: label differs between calls: {list(labels)}")
+        if g["pred"].map(_is_missing).any():
+            excluded.append(str(image_id))
+            continue
+        rows.append({"image_id": image_id, "label": labels[0], "ng_count": int((g["pred"] == "NG").sum())})
+    out = pd.DataFrame(rows, columns=["image_id", "label", "ng_count"]).set_index("image_id")
+    return out, excluded
 
 
 def agreement_rate(df: pd.DataFrame) -> dict[str, Any]:
