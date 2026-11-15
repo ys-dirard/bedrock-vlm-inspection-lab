@@ -305,6 +305,10 @@ def build_loc_report(run_dirs: list[str | Path], out_dir: str | Path, visa_root:
         sf = pd.DataFrame(summary_fl)
         sf.to_csv(paths["summary_firstline"], index=False, lineterminator="\n")
         pd.concat(per_img_fl).to_csv(paths["per_image_firstline"], index=False, lineterminator="\n")
+        # 座標のぶれも参考の読み方で出す（主の規則では、枠のある画像が少ない条件がある）
+        paths["jitter_firstline"] = out / "jitter_firstline.csv"
+        jfl = pd.concat([jitter_table(g) for g in per_img_fl])
+        pd.DataFrame(jitter_summary(jfl)).to_csv(paths["jitter_firstline"], index=False, lineterminator="\n")
         paths["summary_firstline_md"].write_text(
             "参考の読み方（L-D9）：本文の最初の行だけを読む。主の規則（L-D5）ではない。"
             "大きな枠（面積が半分以上）は CI-L14 のとおり分けて出す。\n\n" + to_markdown(sf), encoding="utf-8")

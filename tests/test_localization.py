@@ -457,6 +457,7 @@ def test_locreport_firstline_reference_table(loclab):
     assert "L-D9" in paths["summary_firstline_md"].read_text(encoding="utf-8")
     p2 = build_loc_report([base / "runs" / "A"], base / "out2", visa, base, reference_first_line=False)
     assert "summary_firstline" not in p2
+    assert pd.read_csv(paths["jitter_firstline"]).set_index(["run_name", "label"]).loc[("A", "normal"), "pair_iou_mean"] == 1.0
 
 
 def test_locreport_rejects_mask_size_mismatch(loclab):
