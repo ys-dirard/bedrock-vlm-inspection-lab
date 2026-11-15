@@ -5,7 +5,7 @@ n_refs: 0
 model_id: jp.amazon.nova-2-lite-v1:0
 region: ap-northeast-1
 service_tier: standard
-prompt: prompts/loc_v3.txt
+prompt: prompts/loc_v2.txt          # 本番は v2（2026-11-16 利用者が決定）
 image_long_edge: null
 tiles: 2                            # タイルは JPEG（quality=95）で送る
 inference: {temperature: 0, maxTokens: 600}
