@@ -175,3 +175,31 @@ def test_repeated_condition_row():
     assert (imgmean["threshold"] == 0.05).sum() == 1
     # 見逃し 0 → t=0.05。同点の c は通さず（NG 側）、d だけ通る
     assert row["pass_5pct_conf_imgmean"] == 0.5
+
+
+# ---------------------------------------------------------------- CI-Y7（anomalib の PGn と同じ計算）
+
+def test_pgn_quantile_matches_anomalib_docstring_example():
+    """CI-Y7：anomalib の pg_pb.py の例（preds [0.1, 0.4, 0.35, 0.8]、target [0, 0, 1, 1]、fnr=0.2）は 1.0"""
+    r = M.pgn_quantile([0.1, 0.4, 0.35, 0.8], ["normal", "normal", "anomaly", "anomaly"], 0.2)
+    assert r["pgn_threshold"] == pytest.approx(0.44)
+    assert r["pgn"] == 1.0
+
+
+def test_pgn_quantile_can_exceed_target_miss_rate_unlike_ci_y2():
+    """CI-Y7：不良品 [0,1,2,3,4]、良品 [0.2]、fnr=0.1。分位点 0.4 → 不良品 0 を見逃し（20% > 10%）、良品は通る。
+    CI-Y2 は見逃し 10% 以下を守るので t=0、良品は通らない"""
+    scores, labels = [0, 1, 2, 3, 4, 0.2], ["anomaly"] * 5 + ["normal"]
+    r = M.pgn_quantile(scores, labels, 0.1)
+    assert r["pgn_threshold"] == pytest.approx(0.4)
+    assert r["pgn"] == 1.0 and r["pgn_achieved_miss_rate"] == pytest.approx(0.2)
+    y2 = M.pass_rate_at_miss_scores(scores, labels, 0.1)
+    assert y2["threshold"] == 0 and y2["pass_rate"] == 0.0
+
+
+def test_pgn_quantile_invalid_and_empty():
+    """CI-Y7"""
+    with pytest.raises(ValueError):
+        M.pgn_quantile([0.1, 0.2], ["anomaly", "normal"], 1.5)
+    r = M.pgn_quantile([0.1], ["normal"], 0.05)
+    assert r["pgn"] is None and r["pgn_reason"]

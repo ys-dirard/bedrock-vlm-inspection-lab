@@ -173,6 +173,24 @@ def operating_points(scores: Any, labels: Any) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def pgn_quantile(scores: Any, labels: Any, fnr: float) -> dict[str, Any]:
+    """anomalib の PGn（`anomalib.metrics.pg_pb._PGn`）と同じ計算の参考値（CI-Y7）。
+
+    しきい値 = 不良品のスコアの fnr 分位点（線形補間。torch.quantile の既定と同じ）。
+    PGn = スコアがしきい値より小さい良品 / 良品。実際の見逃し率（しきい値より小さい不良品 / 不良品）も返す。
+    """
+    s, is_anom = _validate_scores(scores, labels)
+    if not 0 <= fnr <= 1:
+        raise ValueError(f"fnr must be in [0, 1], got {fnr}")
+    s_anom, s_norm = s[is_anom], s[~is_anom]
+    if len(s_anom) == 0 or len(s_norm) == 0:
+        return {"pgn": None, "pgn_threshold": None, "pgn_achieved_miss_rate": None,
+                "pgn_reason": "no anomaly or no normal samples"}
+    thr = float(np.quantile(s_anom, fnr, method="linear"))
+    return {"pgn": float((s_norm < thr).mean()), "pgn_threshold": thr,
+            "pgn_achieved_miss_rate": float((s_anom < thr).mean()), "pgn_reason": None}
+
+
 def ng_counts(df: pd.DataFrame, n_repeats: int = 3) -> tuple[pd.DataFrame, list[str]]:
     """画像ごとの「NG と言った回数」（CI-Y4）。どれかの回が解析失敗の画像は除く（Y-D2）。
 

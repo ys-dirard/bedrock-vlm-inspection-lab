@@ -34,6 +34,20 @@ def _pass_rows(condition: str, ordering: str, unit: str, results: list[dict[str,
     return rows
 
 
+def _pass(scores: Any, labels: Any, target: float) -> dict[str, Any]:
+    """CI-Y2 の通過率に、anomalib の PGn と同じ計算の参考値（CI-Y7）を添える。"""
+    scores, labels = list(scores), list(labels)
+    return {**M.pass_rate_at_miss_scores(scores, labels, target), **M.pgn_quantile(scores, labels, target)}
+
+
+def _d1_scores(g: pd.DataFrame) -> tuple[list[float], list[str]]:
+    """1回分の有効な行の D1 スコアと label。確信度の無い行があれば ValueError（CI-M7 の代わりに止める）。"""
+    v = g[~g["pred"].map(_miss)]
+    if v["confidence"].map(_miss).any():
+        raise ValueError("confidence missing in some valid responses")
+    return [M.anomaly_score(p, float(c)) for p, c in zip(v["pred"], v["confidence"])], v["label"].tolist()
+
+
 def _image_mean_scores(df: pd.DataFrame) -> pd.DataFrame:
     """画像ごとの D1 スコアの平均（有効で確信度のある回だけ）。1回も無い画像は除く。"""
     rows = []
@@ -65,7 +79,7 @@ def repeated_condition(name: str, df: pd.DataFrame) -> tuple[dict[str, Any], lis
     ops: list[pd.DataFrame] = []
     # 並べ方1：回ごと → 平均・最小・最大
     for target in TARGET_MISS_RATES:
-        per_t = [M.pass_rate_at_miss(g, target) for _, g in df.groupby("repeat", sort=True)]
+        per_t = [_pass(*_d1_scores(g), target) for _, g in df.groupby("repeat", sort=True)]
         vals = [p["pass_rate"] for p in per_t if p["pass_rate"] is not None]
         key = f"pass_{int(round(target * 100))}pct"
         row[f"{key}_conf"] = float(np.mean(vals)) if vals else None
@@ -75,7 +89,7 @@ def repeated_condition(name: str, df: pd.DataFrame) -> tuple[dict[str, Any], lis
             detail += _pass_rows(name, "conf", f"repeat {rep}", [p])
     # 並べ方1'：画像ごとの平均スコア
     im = _image_mean_scores(df)
-    res = [M.pass_rate_at_miss_scores(im["score"], im["label"], t) for t in TARGET_MISS_RATES]
+    res = [_pass(im["score"], im["label"], t) for t in TARGET_MISS_RATES]
     n_ex = int(df["image_id"].nunique() - len(im))
     detail += _pass_rows(name, "conf_imgmean", "1枚1スコア", res, n_ex)
     for t, r in zip(TARGET_MISS_RATES, res):
@@ -83,7 +97,7 @@ def repeated_condition(name: str, df: pd.DataFrame) -> tuple[dict[str, Any], lis
     ops.append(M.operating_points(im["score"], im["label"]).assign(condition=name, ordering="conf_imgmean"))
     # 並べ方2：NG と言った回数
     nc, excluded = M.ng_counts(df, n_repeats=C.NOVA_REPEATS)
-    res = [M.pass_rate_at_miss_scores(nc["ng_count"], nc["label"], t) for t in TARGET_MISS_RATES]
+    res = [_pass(nc["ng_count"], nc["label"], t) for t in TARGET_MISS_RATES]
     detail += _pass_rows(name, "ngcount", "1枚1スコア", res, len(excluded),
                          note=("除いた画像: " + ", ".join(excluded)) if excluded else None)
     for t, r in zip(TARGET_MISS_RATES, res):
@@ -124,13 +138,13 @@ def cascade_conditions(nova: pd.DataFrame, claude: pd.DataFrame, emb: pd.DataFra
         }
         s = C.final_scores(t, rules[name])
         ok = s.map(lambda v: not _miss(v))
-        pr = [M.pass_rate_at_miss_scores(s[ok], t.loc[ok, "label"], tg) for tg in TARGET_MISS_RATES]
+        pr = [_pass(s[ok], t.loc[ok, "label"], tg) for tg in TARGET_MISS_RATES]
         detail += _pass_rows(row["condition"], "conf", "1枚1スコア（CI-K12）", pr, int((~ok).sum()))
         for tg, p in zip(TARGET_MISS_RATES, pr):
             row[f"pass_{int(round(tg * 100))}pct_conf"] = p["pass_rate"]
         ops.append(M.operating_points(s[ok], t.loc[ok, "label"]).assign(condition=row["condition"], ordering="conf"))
         if name == "Nova だけ":
-            pr2 = [M.pass_rate_at_miss_scores(nc["ng_count"], nc["label"], tg) for tg in TARGET_MISS_RATES]
+            pr2 = [_pass(nc["ng_count"], nc["label"], tg) for tg in TARGET_MISS_RATES]
             detail += _pass_rows(row["condition"], "ngcount", "1枚1スコア", pr2, len(excluded))
             for tg, p in zip(TARGET_MISS_RATES, pr2):
                 row[f"pass_{int(round(tg * 100))}pct_ngcount"] = p["pass_rate"]
