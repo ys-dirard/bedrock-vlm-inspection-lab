@@ -1,0 +1,16 @@
+# 12/12 の記事：一致率による確信度。11/11 の条件 B（n1_B）と同じ画像・見本・プロンプト・読み取りで、temperature だけ 0.7 にして5回
+# 5回の判定のうち NG と言った割合を「一致率による確信度」にする（docs/contracts.md の CI-CB6）。自己申告の確信度も各回で記録される
+name: ac12_t07
+split: data/splits/visa_test_200.csv
+refs: data/splits/visa_refs.csv
+n_refs: 1
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v1_judge.txt
+image_long_edge: null               # 原寸（n1_B と同じ）
+inference: {temperature: 0.7, maxTokens: 300}   # topP は送らない（Nova 2 の既定 0.9。temperature と topP は片方だけ変える）
+repeats: 5
+budget_usd: 0.6                     # 見積り約0.33 USD（200枚×5回×約0.00033 USD）
+parse:
+  allow_code_fence: true            # n1_B と同じ読み取り規則にそろえる

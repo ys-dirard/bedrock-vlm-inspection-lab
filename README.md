@@ -157,6 +157,19 @@ uv run vlmlab cascade --nova runs/n1_B --claude runs/n3_claude_refB     --embedd
 - `cascade_rules.csv`・`.md`（条件ごとの表）、`fixed_and_broken.csv`、`cascade_images.csv`、`confidence_bands.csv`、`business_metric.csv`、`e_thresholds.csv` を出します
 - Claude は説明のあとに ```` ```json ```` の囲みで JSON を付けるので、設定で `parse.allow_trailing_code_fence: true` にしています（CI-P7）
 
+## 確信度の較正（12/12 の記事）
+
+自己申告の確信度と、同じ画像を複数回（temperature 0.7 で5回）判定させたときの一致率を、ECE と信頼度図（10等分の帯）で比べます。確信度で「グレー」を決めて人に回したときの、人が見る件数と見逃しも出します。
+
+```bash
+uv run vlmlab run configs/ac12_t07.yaml --limit 10            # 試運転（10枚×5回）
+uv run vlmlab run configs/ac12_t07.yaml                       # 本番（200枚×5回）
+uv run vlmlab calib --self runs/n1_B runs/n3_claude_refB runs/ac12_t07 --consistency runs/ac12_t07 --out results
+```
+
+- `calibration_summary.csv`（ECE など）、`calibration_reliability_bins.csv`（信頼度図の表）、`calibration_business_metric.csv`、`calibration_gray_zone.csv`、`calibration_consistency_images.csv` を出します
+- 定義は [docs/contracts.md](docs/contracts.md) の CI-CB1〜CB8 にあります
+
 ## MMAD の選択式の問題（11/19 の記事）
 
 [MMAD](https://github.com/jam-cc/MMAD)（ICLR 2025）の選択式の問題を、Bedrock の VLM に解かせて正答率を出します。プロンプト・画像の縮小・回答の読み取り・集計は、公式の評価スクリプト（commit `49db95b` の `evaluation/examples/GPT4/gpt4o.py` と `helper/summary.py`）に合わせています。違うところ（temperature 0、maxTokens 1,024 など）は記事に書いています。

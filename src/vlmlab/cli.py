@@ -6,6 +6,7 @@
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
+  vlmlab calib --self RUN... --consistency RUN... --out DIR   確信度の較正（12/12 の記事。API は呼ばない）
 
   MMAD（11/19 の記事）
   vlmlab mmad prepare                  mmad.json を取得し、data/splits/mmad_1050.csv を作り、使う画像だけ取り出す
@@ -63,6 +64,12 @@ def main(argv: list[str] | None = None) -> None:
     cs.add_argument("--claude", required=True, help="2段目の Claude の実験（例 runs/n3_claude_refB）")
     cs.add_argument("--embeddings", required=True, help="埋め込みの記録（例 runs/n1_E/embeddings.jsonl）")
     cs.add_argument("--out", required=True)
+
+    cb = sub.add_parser("calib", help="確信度の較正：自己申告と一致率の ECE・信頼度図の表・グレーゾーン（12/12 の記事。API は呼ばない）")
+    cb.add_argument("--self", dest="self_runs", nargs="*", default=[], help="自己申告の確信度を測る実験（例 runs/n1_B runs/n3_claude_refB）")
+    cb.add_argument("--consistency", nargs="*", default=[], help="一致率を測る実験（2回以上の繰り返し。例 runs/ac12_t07）")
+    cb.add_argument("--out", required=True)
+    cb.add_argument("--tag", default="calibration")
 
     m = sub.add_parser("mmad", help="MMAD の選択式の問題（11/19 の記事）")
     msub = m.add_subparsers(dest="mcmd", required=True)
@@ -151,6 +158,12 @@ def main(argv: list[str] | None = None) -> None:
         for k, v in write_outputs(res, a.out).items():
             print(f"{k}: {v}")
         print(f"best: {res['best']}")
+    elif a.cmd == "calib":
+        from .calibration import build_calibration
+        if not a.self_runs and not a.consistency:
+            p.error("calib needs --self and/or --consistency")
+        for k, v in build_calibration(a.self_runs, a.consistency, a.out, a.tag).items():
+            print(f"{k}: {v}")
 
 
 def _mmad(a: argparse.Namespace) -> None:
