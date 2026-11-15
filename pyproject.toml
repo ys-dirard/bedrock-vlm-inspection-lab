@@ -10,6 +10,7 @@ dependencies = [
     "pillow>=10.4",
     "scikit-learn>=1.5",
     "pyyaml>=6.0",
+    "scipy>=1.13",                  # マスクの連結成分（12/2 の記事）。scikit-learn の依存で既に入っている
 ]
 
 [project.scripts]

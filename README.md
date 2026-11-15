@@ -26,6 +26,8 @@ bedrock-vlm-inspection-lab/
 │   ├── cost.py             単価表と費用の計算、累計費用での停止
 │   ├── report.py           集計表（CSV と Markdown）を出す
 │   ├── cascade.py          段階判定（迷った画像だけ上位モデルに回す）を記録から計算する
+│   ├── localization.py     不良箇所の枠の読み取り、マスク → 正解枠、IoU、当たり、座標のぶれ
+│   ├── locreport.py        位置の評価の集計（vlmlab locreport）
 │   ├── cli.py              コマンドライン（vlmlab）
 │   └── mmad/               MMAD の選択式の問題（取得・プロンプト・呼び出し・採点・集計）
 ├── tests/                  単体テスト
@@ -156,6 +158,22 @@ uv run vlmlab cascade --nova runs/n1_B --claude runs/n3_claude_refB     --embedd
 - 回す条件は R1（3回の判定が割れた）、R2（確信度<0.8）、R3（NG と言った）、R4（R1 または R3）、R5（確信度<τ）、R6（同じ品目の学習用の良品との最小コサイン距離が、良品どうしの距離の百分位以上）です。定義は [docs/contracts.md](docs/contracts.md) の CI-K1〜K12 にあります
 - `cascade_rules.csv`・`.md`（条件ごとの表）、`fixed_and_broken.csv`、`cascade_images.csv`、`confidence_bands.csv`、`business_metric.csv`、`e_thresholds.csv` を出します
 - Claude は説明のあとに ```` ```json ```` の囲みで JSON を付けるので、設定で `parse.allow_trailing_code_fence: true` にしています（CI-P7）
+
+## 不良箇所の位置（12/2 の記事）
+
+Nova 2 Lite に不良箇所の枠（0〜1000 の `[x1, y1, x2, y2]`）を出させ、VisA の異常マスクと比べます。条件は A（そのまま）、B（良品の見本1枚つき）、C（2×2 に分けて4回呼ぶ）です。
+
+```bash
+uv run vlmlab run configs/ac02_A.yaml --limit 5       # 試運転（各条件5枚）
+uv run vlmlab run configs/ac02_A.yaml                 # 本番（B・C も同じ）
+uv run vlmlab locreport runs/ac02_A runs/ac02_B runs/ac02_C --out results
+```
+
+- 画像の一覧は `data/splits/visa_loc_140.csv`（visa_test_200 の不良100枚と、良品から品目ごとに20枚。マスクのパスの列付き）。B は設定の `labels: [anomaly]` で不良だけを使います
+- 応答は `parse: {mode: boxes}` で読みます。4つの数でない組、0〜1000 の外、左上と右下が逆の組が1つでもあれば解析失敗です（救済しません）
+- `tiles: 2` にすると、画像を2×2 に分けてタイルごとに呼び、記録に `tile`（番号）と `tile_region`（元の画像での範囲）を残します。集計では枠を元の画像の座標に戻してから合わせます
+- 正解枠はマスクの連結成分（8近傍）の外接矩形で、面積が20画素未満のものは除きます。当たり・中心の当たりはマスク全体で判定します
+- `localization_summary.csv`・`.md`、`_by_category.csv`、`_per_image.csv`、`jitter.csv`（座標のぶれ）、`jitter_per_image.csv` を出します。定義は [docs/contracts.md](docs/contracts.md) の CI-L1〜L13 にあります
 
 ## MMAD の選択式の問題（11/19 の記事）
 

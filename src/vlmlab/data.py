@@ -70,6 +70,7 @@ def load_split_table(visa_root: str | Path) -> pd.DataFrame:
         "label": df["label"],
         "split": df["split"],
         "path": df["image"],
+        "mask": df["mask"] if "mask" in df.columns else None,  # 不良品のマスク（良品は空）
     })
     # 良品と不良品でファイル名が重なるので、品目・正解・ファイル名で ID を作る
     out.insert(0, "image_id", out["category"] + "/" + out["label"] + "/" + out["path"].map(lambda p: Path(p).stem))
@@ -140,17 +141,39 @@ def write_splits(visa_root: str | Path, out_dir: str | Path) -> dict[str, Path]:
     if set(refs.image_id) & (set(test.image_id) | set(wide.image_id)):
         raise ValueError("refs overlap with test images")
     knn = make_knn_train(table, set(test.image_id) | set(wide.image_id))
+    loc = make_loc_split(table, test)
     paths = {
         "visa_test_200": out / "visa_test_200.csv",
         "visa_refs": out / "visa_refs.csv",
         "visa_wide_120": out / "visa_wide_120.csv",
         "visa_knn_train": out / "visa_knn_train.csv",
+        "visa_loc_140": out / "visa_loc_140.csv",
     }
     test.to_csv(paths["visa_test_200"], index=False, lineterminator="\n")
     refs.to_csv(paths["visa_refs"], index=False, lineterminator="\n")
     wide.to_csv(paths["visa_wide_120"], index=False, lineterminator="\n")
     knn.to_csv(paths["visa_knn_train"], index=False, lineterminator="\n")
+    loc.to_csv(paths["visa_loc_140"], index=False, lineterminator="\n")
     return paths
+
+
+def make_loc_split(table: pd.DataFrame, test: pd.DataFrame, n_normal_per_category: int = 20) -> pd.DataFrame:
+    """位置の評価（12/2 の記事）：test の不良品すべてと、test の良品から品目ごとに n 枚（random_state=42）。
+
+    マスクのパスの列 `mask` を付ける（L-D1）。不良品にマスクが無ければ止める。
+    """
+    rows = []
+    for cat in test.category.unique():
+        t = test[test.category == cat]
+        rows.append(t[t.label == "anomaly"])
+        rows.append(_sample(t[t.label == "normal"], n_normal_per_category))
+    out = pd.concat(rows, ignore_index=True)[SPLIT_COLUMNS]
+    masks = table.set_index("image_id")["mask"]
+    out["mask"] = [masks[i] if lab == "anomaly" else None for i, lab in zip(out.image_id, out.label)]
+    lacking = out[(out.label == "anomaly") & out["mask"].isna()]
+    if len(lacking):
+        raise ValueError(f"anomaly images without mask: {list(lacking.image_id)[:5]}")
+    return out
 
 
 @dataclass(frozen=True)
@@ -183,3 +206,21 @@ def load_image(path: str | Path, long_edge: int | None = None) -> EncodedImage:
     buf = io.BytesIO()
     small.save(buf, format="JPEG", quality=95)
     return EncodedImage(buf.getvalue(), "jpeg", size[0], size[1])
+
+
+def load_tile(path: str | Path, region: tuple[int, int, int, int]) -> EncodedImage:
+    """画像の一部（region = (x0, y0, x1, y1)、画素）を切り出し、JPEG（quality=95）で符号化する（CI-L5）。"""
+    with Image.open(path) as im:
+        w, h = im.size
+        x0, y0, x1, y1 = region
+        if not (0 <= x0 < x1 <= w and 0 <= y0 < y1 <= h):
+            raise ValueError(f"tile {region} is outside the image {w}x{h}")
+        tile = im.convert("RGB").crop(region)
+    buf = io.BytesIO()
+    tile.save(buf, format="JPEG", quality=95)
+    return EncodedImage(buf.getvalue(), "jpeg", tile.width, tile.height)
+
+
+def image_size(path: str | Path) -> tuple[int, int]:
+    with Image.open(path) as im:
+        return im.size

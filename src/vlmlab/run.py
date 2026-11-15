@@ -20,7 +20,8 @@ import yaml
 
 from .bedrock import LAYOUTS, ModelRequest, ModelResponse, VisionModel
 from .cost import BudgetExceeded, BudgetGuard, PricingTable, call_cost
-from .data import EncodedImage, load_image
+from .data import EncodedImage, image_size, load_image, load_tile
+from .localization import tile_regions
 from .parse import ParseSpec, parse_response
 
 JST = timezone(timedelta(hours=9))
@@ -46,6 +47,8 @@ class RunConfig:
     additional_fields: dict[str, Any] | None = None
     repeats: int = 1
     parse: dict[str, Any] = field(default_factory=dict)
+    labels: list[str] | None = None  # 一覧のうち、この正解の画像だけを使う（例 [anomaly]）
+    tiles: int | None = None  # n なら画像を n×n に分け、タイルごとに呼ぶ（12/2 の記事、CI-L5）
 
     @classmethod
     def load(cls, path: str | Path) -> "RunConfig":
@@ -62,6 +65,10 @@ class RunConfig:
             raise ValueError(f"layout must be one of {LAYOUTS}")
         if cfg.ref_note and cfg.layout != "target_first":
             raise ValueError("ref_note is only used with layout 'target_first'")
+        if cfg.tiles is not None and (cfg.tiles < 2 or cfg.n_refs > 0 or cfg.image_long_edge is not None):
+            raise ValueError("tiles must be >= 2 and cannot be combined with refs or image_long_edge")
+        if cfg.labels is not None and not set(cfg.labels) <= {"normal", "anomaly"}:
+            raise ValueError(f"labels must be normal / anomaly, got {cfg.labels}")
         unknown_inf = set(cfg.inference) - {"temperature", "maxTokens", "topP"}
         if unknown_inf:
             raise ValueError(f"unknown inference keys: {sorted(unknown_inf)} (topK などは additional_fields に書く)")
@@ -107,6 +114,8 @@ class RunPlan:
 
 def plan_run(cfg: RunConfig, base_dir: Path, runs_dir: Path, limit: int | None = None) -> RunPlan:
     split = pd.read_csv(base_dir / cfg.split)
+    if cfg.labels is not None:
+        split = split[split.label.isin(cfg.labels)]
     items = select_limit(split, limit)
     refs_by_cat: dict[str, list[str]] = {}
     if cfg.n_refs > 0:
@@ -144,7 +153,7 @@ def execute(
     prompt_text, system_text = read_prompts(cfg, base_dir)
     identity = call_identity(cfg, prompt_text, system_text)
     check_resume_identity(previous, identity)
-    done = {(r["image_id"], r["repeat"]) for r in previous if r.get("api_error") is None}
+    done = {(r["image_id"], r["repeat"], r.get("tile")) for r in previous if r.get("api_error") is None}
     guard = BudgetGuard.resume(cfg.budget_usd, [r.get("cost_usd") for r in previous])  # CI-C6
 
     # 使った設定とプロンプトを結果と一緒に残す
@@ -159,12 +168,20 @@ def execute(
             image_cache[rel] = load_image(visa_root / rel, cfg.image_long_edge)
         return image_cache[rel]
 
+    def units(row: Any) -> list[tuple[int | None, tuple[int, int, int, int] | None]]:
+        """1枚の画像の呼び出しの単位。分割しないなら [(None, None)]、分割するなら [(番号, 範囲), …]。"""
+        if cfg.tiles is None:
+            return [(None, None)]
+        w, h = image_size(visa_root / row.path)
+        return list(enumerate(tile_regions(w, h, cfg.tiles)))
+
+    work = [(row, tile, region) for row in plan.items.itertuples(index=False) for tile, region in units(row)]
     n_called = n_skipped = 0
     stopped = None
     with jsonl.open("a", encoding="utf-8") as f:
         for repeat in range(1, cfg.repeats + 1):
-            for row in plan.items.itertuples(index=False):
-                if (row.image_id, repeat) in done:
+            for row, tile, region in work:
+                if (row.image_id, repeat, tile) in done:
                     n_skipped += 1
                     continue
                 try:
@@ -173,9 +190,10 @@ def execute(
                     stopped = str(e)
                     break
                 vars_ = cfg.prompt_vars.get(row.category, {})
+                target = img(row.path) if region is None else load_tile(visa_root / row.path, region)
                 req = ModelRequest(
                     model_id=cfg.model_id,
-                    images=[img(p) for p in plan.refs_by_cat.get(row.category, [])] + [img(row.path)],
+                    images=[img(p) for p in plan.refs_by_cat.get(row.category, [])] + [target],
                     text=fill_template(prompt_text, vars_),
                     system=fill_template(system_text, vars_) if system_text else None,
                     temperature=cfg.inference.get("temperature", 0),
@@ -188,14 +206,15 @@ def execute(
                 )
                 called_at = datetime.now(JST).isoformat(timespec="seconds")
                 resp = model.invoke(req)
-                rec = make_record(cfg, run_id, plan.run_name, repeat, row, resp, spec, price, identity, called_at)
+                rec = make_record(cfg, run_id, plan.run_name, repeat, row, resp, spec, price, identity, called_at,
+                                  tile, region)
                 # 先に記録を書く（費用が不明で止まるときも、払った呼び出しの記録は残す）
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 f.flush()
                 guard.add(rec["cost_usd"])
                 n_called += 1
                 if resp.api_error:
-                    log(f"[api_error] {row.image_id} r{repeat}: {resp.api_error}")
+                    log(f"[api_error] {row.image_id} r{repeat} t{tile}: {resp.api_error}")
             if stopped:
                 break
     summary = {"run_name": plan.run_name, "run_id": run_id, "called": n_called, "skipped": n_skipped,
@@ -228,6 +247,7 @@ def call_identity(cfg: RunConfig, prompt_text: str, system_text: str | None) -> 
         "layout": cfg.layout,
         "ref_note": cfg.ref_note,
         "additional_fields": cfg.additional_fields,
+        "tiles": cfg.tiles,
     }
 
 
@@ -243,7 +263,8 @@ def check_resume_identity(previous: list[dict[str, Any]], identity: dict[str, An
 
 def make_record(cfg: RunConfig, run_id: str, run_name: str, repeat: int, row: Any,
                 resp: ModelResponse, spec: ParseSpec, price, identity: dict[str, Any],
-                called_at: str) -> dict[str, Any]:
+                called_at: str, tile: int | None = None,
+                tile_region: tuple[int, int, int, int] | None = None) -> dict[str, Any]:
     pr = parse_response(resp.raw_text, spec) if resp.api_error is None else None
     return {
         "run_name": run_name,
@@ -253,6 +274,8 @@ def make_record(cfg: RunConfig, run_id: str, run_name: str, repeat: int, row: An
         "category": row.category,
         "label": row.label,
         "path": row.path,
+        "tile": tile,  # 分割したときのタイルの番号（0 = 左上、1 = 右上、2 = 左下、3 = 右下）
+        "tile_region": list(tile_region) if tile_region else None,  # 元の画像での範囲 [x0, y0, x1, y1]（画素）
         **identity,
         "service_tier_resolved": resp.service_tier_resolved,
         "raw_text": resp.raw_text,

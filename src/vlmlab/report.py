@@ -27,6 +27,8 @@ def load_run(run_dir: str | Path, parse_override: dict[str, Any] | None = None) 
     cfg = yaml.safe_load((run_dir / "config.yaml").read_text(encoding="utf-8")) or {}
     spec = ParseSpec.from_dict(parse_override if parse_override is not None else cfg.get("parse"))
     df = pd.DataFrame(records)
+    if "tile" in df and df["tile"].notna().any():
+        raise ValueError(f"{run_dir} was split into tiles; use `vlmlab locreport` (one image = several calls)")
     ok = df[df["api_error"].isna()].drop_duplicates(["image_id", "repeat"], keep="last").copy()
     parsed = [parse_response(t, spec) for t in ok["raw_text"]]
     ok["pred"] = [p.pred for p in parsed]

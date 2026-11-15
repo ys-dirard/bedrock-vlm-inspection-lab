@@ -1,0 +1,14 @@
+# 12/2 の記事：条件 A（Nova 2 Lite、画像をそのまま1枚）。不良100枚＋良品40枚 × 3回
+name: ac02_A
+split: data/splits/visa_loc_140.csv
+n_refs: 0
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/loc_v1.txt          # Nova 2 ユーザーガイドの境界ボックス用テンプレートを基にした（plan.md の手順3）
+image_long_edge: null               # 原寸（Nova 2 Lite は画像1枚230トークンで課金）
+inference: {temperature: 0, maxTokens: 300}   # ユーザーガイドの物体検出の推奨：temperature 0、推論なし
+repeats: 3
+budget_usd: 0.5
+parse:
+  mode: boxes                       # [x1, y1, x2, y2]（0〜1000）の並び、または NONE（CI-L1〜L3）

@@ -5,6 +5,7 @@
   vlmlab run CONFIG [--limit N] [--dry-run]
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
+  vlmlab locreport RUN_DIR... --out DIR      位置の評価（12/2 の記事。マスクと比べる。API は呼ばない）
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
 
   MMAD（11/19 の記事）
@@ -57,6 +58,13 @@ def main(argv: list[str] | None = None) -> None:
     rp.add_argument("run_dirs", nargs="+")
     rp.add_argument("--out", required=True)
     rp.add_argument("--tag", default="summary")
+
+    lr = sub.add_parser("locreport", help="位置の評価：枠をマスクと比べる（12/2 の記事。API は呼ばない）")
+    lr.add_argument("run_dirs", nargs="+")
+    lr.add_argument("--out", required=True)
+    lr.add_argument("--tag", default="localization")
+    lr.add_argument("--visa-root", default="data/visa")
+    lr.add_argument("--min-box-area", type=int, default=20, help="正解枠にする外接矩形の最小の面積（画素）")
 
     cs = sub.add_parser("cascade", help="段階判定：記録から回す条件ごとの指標を計算する（11/26 の記事。API は呼ばない）")
     cs.add_argument("--nova", required=True, help="1段目の Nova の実験（例 runs/n1_B）")
@@ -116,9 +124,11 @@ def main(argv: list[str] | None = None) -> None:
         pricing = PricingTable.load(ROOT / a.pricing)
         price = pricing.get(cfg.model_id, cfg.service_tier)
         if a.dry_run:
+            per_image = (cfg.tiles or 1) ** 2
             print(json.dumps({
                 "run_name": plan.run_name, "n_images": len(plan.items), "repeats": cfg.repeats,
-                "calls": len(plan.items) * cfg.repeats, "refs_per_image": cfg.n_refs,
+                "calls_per_image": per_image,
+                "calls": len(plan.items) * cfg.repeats * per_image, "refs_per_image": cfg.n_refs,
                 "price_known": price.runnable, "out_dir": str(plan.out_dir),
                 "by_group": plan.items.groupby(["category", "label"]).size().to_dict().__repr__(),
             }, ensure_ascii=False, indent=2))
@@ -143,6 +153,10 @@ def main(argv: list[str] | None = None) -> None:
     elif a.cmd == "report":
         from .report import build_report
         for k, v in build_report(a.run_dirs, a.out, a.tag).items():
+            print(f"{k}: {v}")
+    elif a.cmd == "locreport":
+        from .locreport import build_loc_report
+        for k, v in build_loc_report(a.run_dirs, a.out, ROOT / a.visa_root, ROOT, a.tag, a.min_box_area).items():
             print(f"{k}: {v}")
     elif a.cmd == "cascade":
         from .cascade import load_embeddings, run_cascade, write_outputs

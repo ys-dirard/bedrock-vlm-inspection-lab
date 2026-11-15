@@ -1,0 +1,16 @@
+# 12/2 の記事：条件 B（良品の見本1枚つき）。不良100枚 × 3回（良品は計画どおり回さない）
+name: ac02_B
+split: data/splits/visa_loc_140.csv
+labels: [anomaly]
+refs: data/splits/visa_refs.csv     # 見本は visa_refs.csv の1枚目（ref_rank=1）
+n_refs: 1
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/loc_v1_ref.txt      # 「The first image is a defect-free reference ...」を前に足したもの
+image_long_edge: null
+inference: {temperature: 0, maxTokens: 300}
+repeats: 3
+budget_usd: 0.5
+parse:
+  mode: boxes

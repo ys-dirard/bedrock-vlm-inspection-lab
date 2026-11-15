@@ -9,6 +9,10 @@
 #     （https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html 「The price is calculated based on the Region from which you call an inference profile」）
 #   - 料金ページの Nova の表は JavaScript で読み込まれるため、自動では読み出せず、料金ページとの照合はまだ（ブラウザで目視確認が要る）
 #   - 詳細は記事フォルダの results/pricing_used.md
+#
+# 2026-11-16 の確認（12/2 の記事の試運転の直前）
+#   - jp.amazon.nova-2-lite-v1:0 の単価を Price List API で確かめ直した。価格表の版 20261111013037（publicationDate 2026-11-11T01:30:37Z）、
+#     effectiveDate 2026-11-01。APN1-Nova2.0Lite-input-tokens 0.000396 / 1K、-output-tokens 0.003311 / 1K で、11/05 と同じ
 
 models:
   - model_id: jp.amazon.nova-2-lite-v1:0       # JP Geo（ap-northeast-1 / ap-northeast-3 で処理）。東京の単価
@@ -17,8 +21,8 @@ models:
     output_per_mtok: 3.311                     # APN1-Nova2.0Lite-output-tokens
     cache_read_per_mtok: 0.099                 # APN1-Nova2.0Lite-cache-read-input-token-count
     cache_write_per_mtok: 0.0                  # APN1-Nova2.0Lite-cache-write-input-token-count
-    source_url: "AWS Price List API (AmazonBedrock, ap-northeast-1, publicationDate 2026-11-02)"
-    checked_on: "2026-11-05"
+    source_url: "AWS Price List API (AmazonBedrock, ap-northeast-1, publicationDate 2026-11-11)"
+    checked_on: "2026-11-16"
     model_id_source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html
     model_id_checked_on: "2026-11-05"
     note: 画像は解像度によらず1枚230トークンで課金（https://docs.aws.amazon.com/nova/latest/nova2-userguide/using-multimodal-models.html、2026-11-05 確認）。料金ページとの照合は未
