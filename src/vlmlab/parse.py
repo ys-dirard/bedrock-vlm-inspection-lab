@@ -1,4 +1,4 @@
-"""応答の JSON を読み取る。救済はしない（docs/contracts.md の CI-P1〜P5）。
+"""応答の JSON を読み取る。救済はしない（docs/contracts.md の CI-P1〜P7）。
 
 JSON として読めなかった応答は「解析失敗」として数える。正規表現で JSON を探し出すことはしない。
 """
@@ -31,6 +31,7 @@ class ParseSpec:
     confidence_key: str | None = "confidence"
     defect_key: str | None = "defect"
     allow_code_fence: bool = False
+    allow_trailing_code_fence: bool = False  # 説明の文章のあとの、末尾の ```json 囲みを読む（CI-P7）
 
     @classmethod
     def from_dict(cls, d: dict[str, Any] | None) -> "ParseSpec":
@@ -71,14 +72,42 @@ def _strip_fence(text: str) -> str | None:
     return text[first_nl + 1 : -3].strip()
 
 
-def parse_object(raw_text: str | None, allow_code_fence: bool = False) -> tuple[dict[str, Any] | None, str | None]:
-    """本文全体が JSON のオブジェクトなら (obj, None)、そうでなければ (None, 理由)。CI-P1〜P3。"""
+def _trailing_fence(text: str) -> str | None:
+    """本文の末尾にある囲みの中身を返す（CI-P7）。形が崩れていれば None。
+
+    text は前後の空白を除いたもので、``` で終わっていること。開き・閉じとも行の先頭にあり、
+    開きの情報文字列は空・json・JSON のどれか。開きより前の文章は捨てる。
+    """
+    body = text[: -len(_FENCE_OPEN)]
+    if not (body == "" or body.rstrip(" \t").endswith("\n")):
+        return None  # 閉じの ``` が行の先頭にない
+    open_at = body.rfind(_FENCE_OPEN)
+    if open_at == -1 or (open_at > 0 and body[open_at - 1] != "\n"):
+        return None
+    first_nl = body.find("\n", open_at)
+    if first_nl == -1:
+        return None
+    info = body[open_at + len(_FENCE_OPEN) : first_nl].strip()
+    if info not in ("", "json", "JSON"):
+        return None
+    return body[first_nl + 1 :].strip()
+
+
+def parse_object(
+    raw_text: str | None, allow_code_fence: bool = False, allow_trailing_code_fence: bool = False
+) -> tuple[dict[str, Any] | None, str | None]:
+    """本文全体が JSON のオブジェクトなら (obj, None)、そうでなければ (None, 理由)。CI-P1〜P3、P7。"""
     if raw_text is None:
         return None, "empty: no text"
     text = raw_text.strip()
     if not text:
         return None, "empty: blank text"
-    if allow_code_fence and text.startswith(_FENCE_OPEN):
+    if allow_trailing_code_fence and text.endswith(_FENCE_OPEN):
+        inner = _trailing_fence(text)
+        if inner is None:
+            return None, "json: malformed trailing code fence"
+        text = inner
+    elif allow_code_fence and text.startswith(_FENCE_OPEN):
         inner = _strip_fence(text)
         if inner is None:
             return None, "json: malformed code fence"
@@ -95,7 +124,7 @@ def parse_object(raw_text: str | None, allow_code_fence: bool = False) -> tuple[
 def parse_response(raw_text: str | None, spec: ParseSpec | None = None) -> ParseResult:
     """応答を読み取り、判定（OK/NG）と確信度に直す。例外は投げない（CI-P2）。"""
     spec = spec or ParseSpec()
-    obj, err = parse_object(raw_text, spec.allow_code_fence)
+    obj, err = parse_object(raw_text, spec.allow_code_fence, spec.allow_trailing_code_fence)
     if obj is None:
         return _fail(err or "unknown")
     if spec.mode == "objects":

@@ -146,3 +146,69 @@ def test_objects_mode_still_requires_whole_object():
 def test_unknown_mode_fails():
     r = parse_response('{"judgement": "OK"}', ParseSpec(mode="foo"))
     assert not r.ok and r.parse_error.startswith("spec:")
+
+
+# ---- CI-P7：説明の文章のあとの、末尾の囲みを読む（11/26 の記事、Claude の応答の形）----
+
+_CLAUDE_LIKE = (
+    "2枚目の画像（検査対象）を詳しく確認します。\n\n"
+    "**比較:**\n- 異物: あり\n\n"
+    '```json\n{"judgement": "NG", "defect": "異物", "confidence": 0.87}\n```'
+)
+
+
+def test_trailing_fence_fails_by_default():
+    """CI-P1, CI-P3, CI-P7：既定（False）では、前に文章がある応答は失敗のまま"""
+    assert not parse_response(_CLAUDE_LIKE).ok
+    assert not parse_response(_CLAUDE_LIKE, ParseSpec(allow_code_fence=True)).ok
+
+
+def test_trailing_fence_is_read_when_allowed():
+    """CI-P7：前置きの文章は捨て、末尾の囲みの中身に CI-P4・P5 を当てる"""
+    r = parse_response(_CLAUDE_LIKE + "\n  ", ParseSpec(allow_trailing_code_fence=True))
+    assert r.ok and r.pred == "NG" and r.confidence == 0.87 and r.defect == "異物"
+
+
+@pytest.mark.parametrize("text", [
+    '{"judgement": "OK", "confidence": 0.9}',                        # 囲みなし（本文全体が JSON）
+    '```json\n{"judgement": "OK", "confidence": 0.9}\n```',          # 本文全体が囲み
+    '```\n{"judgement": "OK", "confidence": 0.9}\n```',              # 情報文字列なし
+    '説明\n```JSON\n{"judgement": "OK", "confidence": 0.9}\n```',    # 大文字の JSON
+])
+def test_trailing_fence_option_keeps_plain_and_whole_fence(text):
+    """CI-P1, CI-P7：囲みが無い応答・本文全体の囲みも読める"""
+    r = parse_response(text, ParseSpec(allow_trailing_code_fence=True))
+    assert r.ok and r.pred == "OK"
+
+
+def test_trailing_fence_takes_last_block():
+    """CI-P7：囲みが2つあれば、末尾のものだけを読む"""
+    text = ('見本の判定:\n```json\n{"judgement": "NG", "confidence": 0.1}\n```\n'
+            '検査対象:\n```json\n{"judgement": "OK", "confidence": 0.6}\n```')
+    r = parse_response(text, ParseSpec(allow_trailing_code_fence=True))
+    assert r.ok and r.pred == "OK" and r.confidence == 0.6
+
+
+@pytest.mark.parametrize("text", [
+    '説明\n```json\n{"judgement": "OK"}\n```\n以上です',              # 囲みの後ろに文章
+    '説明 {"judgement": "OK", "confidence": 0.9}',                   # 囲みが無い文章（探し出さない）
+    '説明\n```python\n{"judgement": "OK"}\n```',                     # 情報文字列が json 以外
+    '説明 ```json\n{"judgement": "OK"}\n```',                        # 開きが行の先頭にない
+    '説明\n```json\n{"judgement": "OK"}```',                         # 閉じが行の先頭にない
+    '説明\n```json {"judgement": "OK"}\n```',                        # 開きの行に中身がある
+    '```',                                                           # 囲みだけ
+])
+def test_trailing_fence_malformed_fails_without_exception(text):
+    """CI-P2, CI-P3, CI-P7：形が崩れていれば失敗。例外は投げない"""
+    r = parse_response(text, ParseSpec(allow_trailing_code_fence=True))
+    assert not r.ok and r.pred is None and r.parsed is None
+    assert r.parse_error.startswith("json:")
+
+
+def test_trailing_fence_content_still_schema_checked():
+    """CI-P4, CI-P5, CI-P7：囲みの中身にも判定と確信度の規則を当てる"""
+    bad = '説明\n```json\n{"judgement": "ok", "confidence": 0.9}\n```'
+    r = parse_response(bad, ParseSpec(allow_trailing_code_fence=True))
+    assert not r.ok and r.parse_error.startswith("schema:") and r.parsed is not None
+    bad_c = '説明\n```json\n{"judgement": "OK", "confidence": 1.5}\n```'
+    assert parse_response(bad_c, ParseSpec(allow_trailing_code_fence=True)).parse_error.startswith("schema:")
