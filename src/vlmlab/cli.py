@@ -125,7 +125,8 @@ def main(argv: list[str] | None = None) -> None:
             return
         from .bedrock import BedrockConverse
         from .run import execute
-        execute(plan, BedrockConverse(cfg.region), pricing, ROOT / a.visa_root, ROOT)
+        model = BedrockConverse(cfg.region, max_attempts=cfg.max_attempts, read_timeout_s=cfg.read_timeout_s)
+        execute(plan, model, pricing, ROOT / a.visa_root, ROOT)
     elif a.cmd == "embed":
         from .embed_run import EmbedConfig, execute_embed, load_embedding_price, plan_images
         cfg = EmbedConfig.load(a.config)

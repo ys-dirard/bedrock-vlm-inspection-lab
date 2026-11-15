@@ -22,6 +22,7 @@ models:
     model_id_source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html
     model_id_checked_on: "2026-11-05"
     note: 画像は解像度によらず1枚230トークンで課金（https://docs.aws.amazon.com/nova/latest/nova2-userguide/using-multimodal-models.html、2026-11-05 確認）。料金ページとの照合は未
+    recheck: "2026-11-16 Price List API（版 20261111013037、publicationDate 2026-11-11、effectiveDate 2026-11-01）で同じ値。推論のトークンは出力の単価で課金（https://docs.aws.amazon.com/nova/latest/nova2-userguide/extended-thinking.html）"
 
   - model_id: global.amazon.nova-2-lite-v1:0   # Global（東京から呼んだときの単価）
     service_tier: standard

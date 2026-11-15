@@ -1,0 +1,21 @@
+# 12/9 の記事：推論 high（R-high）。20枚（品目ごとに良品5枚・不良品5枚）を1回だけ
+# high では temperature・topP・topK・maxTokens を送れない（ユーザーガイド、2026-11-16 確認）。null で送らない
+# maxTokens で出力を止められないので、累計の費用で止める（budget_usd 0.5。plan の上限）
+name: ac09_high20
+split: data/splits/visa_test_high20.csv       # visa_test_200.csv を select_limit(…, 20) で選んだもの
+refs: data/splits/visa_refs.csv
+n_refs: 1
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v1_judge.txt
+image_long_edge: null
+inference: {temperature: null, maxTokens: null}
+additional_fields:
+  reasoningConfig: {type: enabled, maxReasoningEffort: high}
+repeats: 1
+budget_usd: 0.5
+read_timeout_s: 900                           # 出力が数万トークンになりうる
+max_attempts: 2                               # 読み取りのタイムアウトで呼び直すと、そのたびに課金されうる
+parse:
+  allow_code_fence: true

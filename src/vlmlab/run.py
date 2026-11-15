@@ -18,7 +18,7 @@ from typing import Any, Callable
 import pandas as pd
 import yaml
 
-from .bedrock import LAYOUTS, ModelRequest, ModelResponse, VisionModel
+from .bedrock import LAYOUTS, ModelRequest, ModelResponse, VisionModel, check_reasoning_constraints
 from .cost import BudgetExceeded, BudgetGuard, PricingTable, call_cost
 from .data import EncodedImage, load_image
 from .parse import ParseSpec, parse_response
@@ -46,6 +46,8 @@ class RunConfig:
     additional_fields: dict[str, Any] | None = None
     repeats: int = 1
     parse: dict[str, Any] = field(default_factory=dict)
+    read_timeout_s: int = 120  # 1回の呼び出しの読み取りのタイムアウト（推論を有効にするときに延ばす）
+    max_attempts: int = 6  # 再試行を含めた最大の試行回数
 
     @classmethod
     def load(cls, path: str | Path) -> "RunConfig":
@@ -65,6 +67,11 @@ class RunConfig:
         unknown_inf = set(cfg.inference) - {"temperature", "maxTokens", "topP"}
         if unknown_inf:
             raise ValueError(f"unknown inference keys: {sorted(unknown_inf)} (topK などは additional_fields に書く)")
+        if cfg.max_attempts < 1 or cfg.read_timeout_s <= 0:
+            raise ValueError("max_attempts must be >= 1 and read_timeout_s must be > 0")
+        # 推論 high で送れない値を、最初の呼び出しの前に見つける（CI-B5）。null を書けば送らない
+        check_reasoning_constraints(cfg.inference.get("temperature", 0), cfg.inference.get("maxTokens", 300),
+                                    cfg.inference.get("topP"), cfg.additional_fields)
         return cfg
 
     @property
@@ -269,6 +276,8 @@ def make_record(cfg: RunConfig, run_id: str, run_name: str, repeat: int, row: An
         "attempts": resp.attempts,
         "api_error": resp.api_error,
         "server_latency_ms": resp.extra.get("server_latency_ms"),
+        "reasoning_blocks": resp.extra.get("reasoning_blocks"),  # 推論のブロックの数（CI-B4）
+        "reasoning_text": resp.extra.get("reasoning_text"),  # Nova 2 では "[REDACTED]"
         "timestamp": called_at,  # 呼び出した時刻（JST）
     }
 

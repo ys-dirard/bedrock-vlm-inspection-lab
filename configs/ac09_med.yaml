@@ -1,0 +1,20 @@
+# 12/9 の記事：推論 medium（R-med）。推論の設定のほかは R-off（n1_B）と同じ
+# reasoningConfig の書き方: https://docs.aws.amazon.com/nova/latest/nova2-userguide/extended-thinking.html（2026-11-16 確認）
+name: ac09_med
+split: data/splits/visa_test_200.csv
+refs: data/splits/visa_refs.csv
+n_refs: 1
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v1_judge.txt
+image_long_edge: null
+inference: {temperature: 0, maxTokens: 8000}  # 推論分を含む出力の上限。上限に達すると stopReason が max_tokens
+additional_fields:
+  reasoningConfig: {type: enabled, maxReasoningEffort: medium}
+repeats: 1                          # 費用を抑えるため1回（plan）
+budget_usd: 1.2
+read_timeout_s: 300
+max_attempts: 3
+parse:
+  allow_code_fence: true

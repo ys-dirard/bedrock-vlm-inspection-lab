@@ -1,0 +1,17 @@
+# 12/9 の記事：推論 off（R-off）。11/11 の条件 B（configs/n1_B.yaml）と同じ呼び方
+# 1回目は n1_B の記録（repeat=1）を使う。n1_B は同じ設定で3回あるので、2回目も n1_B の repeat=2 で代えられる（要判断）。
+# この設定を本番で回すのは、2回目を新しく取ると決めたときだけ
+name: ac09_off
+split: data/splits/visa_test_200.csv
+refs: data/splits/visa_refs.csv
+n_refs: 1
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v1_judge.txt
+image_long_edge: null
+inference: {temperature: 0, maxTokens: 300}   # n1_B と同じ（plan の案の 0.00001 ではなく 0。deviations.md）
+repeats: 1
+budget_usd: 0.2
+parse:
+  allow_code_fence: true

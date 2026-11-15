@@ -77,6 +77,8 @@ parse:                              # 省略すると {"judgement": "OK"/"NG", "
 - AWS サンプルの応答（`objects` の各要素の `qc` が OK/NOK）は、`parse: {mode: objects, judgement_key: qc, ng_values: [NOK], confidence_key: null, defect_key: reason}` で読みます。空の配列なら OK、NOK が1つでもあれば NG です
 - 品目ごとにプロンプトの一部を差し替えるときは、プロンプトに `{{item}}` のように書き、`prompt_vars: {pcb1: {item: "..."}, capsules: {item: "..."}}` を設定します
 - 推論の設定などは `additional_fields` に書くと `additionalModelRequestFields` として渡します
+- Nova 2 Lite の推論（extended thinking）は `additional_fields: {reasoningConfig: {type: enabled, maxReasoningEffort: low}}` のように書きます。判定の JSON は推論のブロック（`reasoningContent`、中身は `[REDACTED]`）ではなく本文の `text` のブロックから読み、推論のブロックの数は記録の `reasoning_blocks` に残します。`high` では temperature・maxTokens・topP・topK を送れないので、`inference: {temperature: null, maxTokens: null}` と書きます（例: `configs/ac09_high20.yaml`）
+- 推論で応答が長くなるときは `read_timeout_s`（既定 120）を延ばし、再試行で何度も課金されないよう `max_attempts`（既定 6）を減らせます
 
 ### 2. 試運転してから本番
 
@@ -122,6 +124,7 @@ uv run vlmlab report runs/n1_A runs/n1_B runs/n1_C --out results --tag summary_2
 | parsed, parse_error | 読み取った JSON（読めなければ null）、読めなかった理由 |
 | input_tokens, output_tokens, cache_read_tokens, cache_write_tokens | usage の値 |
 | latency_s, server_latency_ms | 呼び出しの往復時間（秒）、応答の metrics.latencyMs |
+| reasoning_blocks, reasoning_text | 推論のブロックの数と中身（Nova 2 では `[REDACTED]`）。推論のトークンは output_tokens に含まれる |
 | stop_reason | stopReason |
 | cost_usd | トークン数 × 単価 |
 | attempts, api_error | 試した回数、再試行しても失敗したときの内容 |

@@ -59,6 +59,9 @@
 | CI-R3 | post | (image_id, repeat) ごとに、成功した記録は1つだけ使う（複数あれば最後のもの）。API のエラーで終わった記録は指標に入れず、件数を n_api_error に出す |
 | CI-B2 | post | `layout: refs_first` は [見本…, 検査対象, 指示]、`layout: target_first` は [検査対象, 指示, ref_note, 見本…] の順で、1通の user メッセージにする。ref_note は target_first のときだけ使える。topP は設定したときだけ送る |
 | CI-B1 | post | スロットリングなどの再試行できるエラーと、タイムアウト・接続の失敗は、指数バックオフで max_attempts まで試す。それでも失敗したら例外を投げずに api_error を返す。再試行できないエラーはすぐ api_error を返す |
+| CI-B3 | post | 応答の本文（`raw_text`）は、`content` のうち最上位に `text` を持つブロックだけを出てきた順につないだもの。推論のブロック（`reasoningContent`）や `toolUse` は入れない。`text` のブロックが無ければ `None`（推論の途中で上限に達したときなど。読み取りは `empty: no text` の失敗になる）。2026-11-16 追加（12/9 の記事） |
+| CI-B4 | post | 推論のブロックの数を `reasoning_blocks`、その `reasoningText.text` をつないだものを `reasoning_text` として記録する（Nova 2 では `[REDACTED]`。`redactedContent` は `<redactedContent>` と書く）。推論のトークン数は usage の `outputTokens` に含まれ、費用もそこから計算する（推論分だけを分けた数は応答に無い） |
+| CI-B5 | pre | `additional_fields.reasoningConfig` が `type: enabled`・`maxReasoningEffort: high` のとき、temperature・maxTokens・topP（`inference`）と topK（`additional_fields`）は送れない。設定ファイルで `temperature: null`・`maxTokens: null` と書けば送らない（inferenceConfig ごと省く）。値が残っていれば、設定の読み込みと呼び出しの組み立ての両方で ValueError にし、API は呼ばない。low・medium にはこの制約をかけない。根拠: https://docs.aws.amazon.com/nova/latest/nova2-userguide/extended-thinking.html（2026-11-16 確認） |
 
 ## embed.py・embed_run.py（条件 E：埋め込み＋k近傍法）
 

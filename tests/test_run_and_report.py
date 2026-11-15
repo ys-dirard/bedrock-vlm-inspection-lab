@@ -261,6 +261,11 @@ def test_converse_kwargs_rejects_bad_layout():
     {"layout": "nope"},
     {"ref_note": "x"},                              # layout が refs_first のまま
     {"inference": {"temperature": 0, "topK": 20}},  # topK は additional_fields に書く
+    # CI-B5: 推論 high で temperature・maxTokens を書かない（既定の 0・300 が入る）、または値を書く
+    {"additional_fields": {"reasoningConfig": {"type": "enabled", "maxReasoningEffort": "high"}}},
+    {"inference": {"temperature": None, "maxTokens": 300},
+     "additional_fields": {"reasoningConfig": {"type": "enabled", "maxReasoningEffort": "high"}}},
+    {"max_attempts": 0},
 ])
 def test_config_rejects_invalid_layout_and_inference(tmp_path, extra):
     import yaml
@@ -269,3 +274,38 @@ def test_config_rejects_invalid_layout_and_inference(tmp_path, extra):
     p.write_text(yaml.safe_dump(d), encoding="utf-8")
     with pytest.raises(ValueError):
         RunConfig.load(p)
+
+
+def test_reasoning_high_config_and_record(lab):
+    """CI-B5, CI-B4: high は temperature・maxTokens を null にすれば読み込め、送る内容から外れる。
+    記録には推論のブロック数と中身（[REDACTED]）、本文だけの raw_text が残る。"""
+    import yaml
+    base, visa, pricing = lab
+    d = json.loads((base / "c.yaml").read_text(encoding="utf-8"))
+    d.update(name="hi", repeats=1, inference={"temperature": None, "maxTokens": None},
+             additional_fields={"reasoningConfig": {"type": "enabled", "maxReasoningEffort": "high"}},
+             read_timeout_s=900, max_attempts=2)
+    (base / "hi.yaml").write_text(yaml.safe_dump(d, allow_unicode=True), encoding="utf-8")
+    cfg = RunConfig.load(base / "hi.yaml")
+
+    class ReasoningModel:
+        def __init__(self):
+            self.kwargs = []
+
+        def invoke(self, req):
+            self.kwargs.append(build_converse_kwargs(req))
+            return response_from_converse(
+                {"output": {"message": {"content": [{"reasoningContent": {"reasoningText": {"text": "[REDACTED]"}}},
+                                                    {"text": '{"judgement": "OK", "confidence": 0.9}'}]}},
+                 "usage": {"inputTokens": 600, "outputTokens": 1500}, "stopReason": "end_turn"}, 3.0, 1)
+
+    m = ReasoningModel()
+    execute(plan_run(cfg, base, base / "runs", limit=2), m, pricing, visa, base, log=lambda _: None)
+    assert all("inferenceConfig" not in k for k in m.kwargs)
+    recs = [json.loads(x) for x in (base / "runs" / "hi__trial2" / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(recs) == 2
+    r = recs[0]
+    assert r["temperature"] is None and r["max_tokens"] is None
+    assert r["reasoning_blocks"] == 1 and r["reasoning_text"] == "[REDACTED]"
+    assert r["raw_text"] == '{"judgement": "OK", "confidence": 0.9}' and r["parsed"]["judgement"] == "OK"
+    assert r["cost_usd"] == pytest.approx((600 * 0.33 + 1500 * 2.75) / 1e6)
