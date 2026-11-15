@@ -6,6 +6,7 @@
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
+  vlmlab anomalydino CONFIG [--limit N]  手元の AnomalyDINO で異常度を出す（12/10 の記事。AWS は使わない。uv sync --extra anomalydino）
 
   MMAD（11/19 の記事）
   vlmlab mmad prepare                  mmad.json を取得し、data/splits/mmad_1050.csv を作り、使う画像だけ取り出す
@@ -63,6 +64,15 @@ def main(argv: list[str] | None = None) -> None:
     cs.add_argument("--claude", required=True, help="2段目の Claude の実験（例 runs/n3_claude_refB）")
     cs.add_argument("--embeddings", required=True, help="埋め込みの記録（例 runs/n1_E/embeddings.jsonl）")
     cs.add_argument("--out", required=True)
+
+    ad = sub.add_parser("anomalydino", help="手元の AnomalyDINO で異常度を出す（12/10 の記事。AWS は使わない）")
+    ad.add_argument("config")
+    ad.add_argument("--limit", type=int, default=None, help="試運転の枚数（runs/<name>__trial<N>/ に出す）")
+    ad.add_argument("--dry-run", action="store_true", help="モデルを読まず、枚数と見本だけ表示する")
+    ad.add_argument("--visa-root", default="data/visa")
+    ad.add_argument("--runs-dir", default="runs")
+    ad.add_argument("--anomalydino-root", default="third_party/AnomalyDINO", help="公式実装の clone")
+    ad.add_argument("--torch-home", default="data/torch_home", help="DINOv2 の重みと hub のコードの置き場（TORCH_HOME）")
 
     m = sub.add_parser("mmad", help="MMAD の選択式の問題（11/19 の記事）")
     msub = m.add_subparsers(dest="mcmd", required=True)
@@ -144,6 +154,22 @@ def main(argv: list[str] | None = None) -> None:
         from .report import build_report
         for k, v in build_report(a.run_dirs, a.out, a.tag).items():
             print(f"{k}: {v}")
+    elif a.cmd == "anomalydino":
+        import os
+        os.environ["TORCH_HOME"] = str((ROOT / a.torch_home).resolve())
+        from .anomalydino import AdConfig, execute as ad_execute, plan as ad_plan
+        cfg = AdConfig.load(a.config)
+        if a.dry_run:
+            run_name, items, refs_by_cat = ad_plan(cfg, ROOT, a.limit)
+            print(json.dumps({
+                "run_name": run_name, "n_images": len(items),
+                "refs": {c: [r["image_id"] for r in rs] for c, rs in refs_by_cat.items()},
+                "by_group": items.groupby(["category", "label"]).size().to_dict().__repr__(),
+            }, ensure_ascii=False, indent=2))
+            return
+        out = ad_execute(cfg, Path(a.config), ROOT, Path(a.visa_root), ROOT / a.runs_dir,
+                         ROOT / a.anomalydino_root, a.limit)
+        print(f"out: {out}")
     elif a.cmd == "cascade":
         from .cascade import load_embeddings, run_cascade, write_outputs
         from .report import load_run

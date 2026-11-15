@@ -94,6 +94,24 @@
 | CI-K11 | post | 確信度の帯：nova_conf で [0, 0.5)、[0.5, 0.7)、[0.7, 0.9)、[0.9, 1.0] に分け、件数と nova_pred の正解率を出す。nova_pred が None の画像は件数に入れ、正解率の分母から除く。件数 0 の帯の正解率は None |
 | CI-K12 | post | 業務指標（CI-M6 の計算を使う）：画像ごとのスコアは、Nova だけ = 有効な回の D1 スコアの平均、Claude だけ = Claude の D1 スコア、段階判定 = 回して Claude が有効なら Claude の D1 スコア、それ以外は1段目のスコア（R1〜R5 は Nova のスコア、R6 は 0）。「一番よかった段階判定」は F1 が最大の条件（同じなら1,000枚あたりの費用が安いほう） |
 
+## anomalydino.py（12/10 の記事：手元の AnomalyDINO で異常度を出す。AWS は使わない）
+
+参照の作法: dammsi/AnomalyDINO（commit `dd35b0f`、Apache-2.0）の `src/backbones.py`・`src/utils.py` をそのまま読み込み、`src/detection.py` の `run_anomaly_detection` と `src/post_eval.py` の `mean_top1p` の計算を写す（`detection.py` は CUDA の同期を必ず呼ぶので CPU では使えない）。DINOv2（Apache-2.0）は torch.hub で、commit `7764ea0` に固定して読む。
+
+目的の整理（mino-problem-framing、2026-11-16）
+- 目的：Bedrock を呼ばずに、良品1枚の見本から画像ごとの「不良らしさ」（異常度）を出し、後段で「異常度の上位 X% だけ Nova 2 Lite に回す」並べ替えに使う。あわせて、手元の CPU での1枚あたりの時間を測る
+- 成功条件：テスト200枚すべてに有限の異常度と処理時間がある。計算が公式実装の VisA の既定（agnostic：テスト画像だけ背景を除く、見本は8方向に回転、DINOv2 ViT-S/14、短辺448、1近傍のコサイン距離、上位1%の平均）と同じ
+- 拒否条件：テスト画像と見本が重なる。品目の見本が1枚でない。公式実装・DINOv2 の commit が設定と違う。異常度が NaN
+- 未決（利用者が決める）：解像度（448 / 672）、CPU / GPU、回す割合を品目ごとに取るか全体で取るか、しきい値をテストの正解で決めること（plan.md の手順2）の扱い
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-A1 | pre | テストの各品目に、見本（refs の ref_rank 1〜n_refs）がちょうど n_refs 枚ある。テストと見本の image_id が1つでも重なれば止める |
+| CI-A2 | post | パッチの距離 = 1 − （テスト画像のパッチと、見本（回転を含む全パッチ）のうち最も近いパッチとのコサイン類似度）。特徴は float32 で L2 正規化する。背景として除いたパッチの距離は 0（公式と同じ）。背景の除去は公式の `compute_background_mask`（PCA は svd_solver="randomized" で乱数を固定していない）なので、画像ごとに直前で `np.random.seed(42)` とし、同じ画像なら順番や再開に関係なく同じ値にする（公式との違い。2026-11-16 の試運転で、同じ8枚を2回出して完全に一致） |
+| CI-A3 | post | 画像の異常度 = 全パッチ（背景の 0 を含む）N 個の距離のうち、大きい順に floor(0.01 N) 個の平均。floor(0.01 N) が 0 なら最大値（公式の mean_top1p） |
+| CI-A4 | post | 1枚1行で image_id・category・label・score・time_s・n_patches・n_foreground を残す。time_s は画像の読み込みから異常度までの時間（モデルの読み込みと見本の特徴づくりは含めず、品目ごとに別に残す） |
+| CI-A5 | pre | 再開のとき、異常度の中身を決める設定（model_name、resolution、masking、rotation、n_refs、公式実装と DINOv2 の commit、refs の SHA-256）が前の記録と違えば止める。済んだ image_id は飛ばす |
+
 ## 前提（assumption）
 
 - Bedrock の usage の inputTokens には、キャッシュから読んだトークンは含まれない。キャッシュを使う記事で確かめる
