@@ -93,8 +93,8 @@ def build_report(run_dirs: list[str | Path], out_dir: str | Path, tag: str = "su
         for cat, g in df.groupby("category", sort=True):
             cat_rows.append({"run_name": name, "category": cat, **M.aggregate_repeats(M.per_repeat(g))})
         biz_rows += [{"run_name": name, **r} for r in business(df)]
-        cache_rows.append({"run_name": name, "category": "all", **M.cache_stats(df)})
-        cache_rows += [{"run_name": name, "category": cat, **M.cache_stats(g)}
+        cache_rows.append({"run_name": name, "category": "all", **M.cache_stats(df), **M.cost_stats(df)})
+        cache_rows += [{"run_name": name, "category": cat, **M.cache_stats(g), **M.cost_stats(g)}
                        for cat, g in df.groupby("category", sort=True)]
         wrong.append(misclassified(df))
 
