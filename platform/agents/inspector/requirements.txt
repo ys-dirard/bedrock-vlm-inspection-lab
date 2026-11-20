@@ -1,0 +1,7 @@
+# 検査エージェントの依存（AgentCore Runtime、Linux arm64、Python 3.12）。scripts/build_zips.py が arm64 の wheel を集める
+strands-agents==1.65.0
+bedrock-agentcore==1.26.1
+boto3==1.44.7
+pillow<13  # 13.x has no manylinux2014 aarch64 wheel (2026-11-20)
+pyyaml==6.0.3
+aws-opentelemetry-distro

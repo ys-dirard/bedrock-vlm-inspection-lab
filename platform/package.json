@@ -1,0 +1,8 @@
+{
+  "name": "vlmlab-platform-cdk",
+  "private": true,
+  "description": "CDK の CLI だけを開発用に入れる（グローバルには入れない）。npx cdk で使う",
+  "devDependencies": {
+    "aws-cdk": "2.1149.0"
+  }
+}

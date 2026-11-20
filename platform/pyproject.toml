@@ -1,0 +1,26 @@
+[project]
+name = "vlmlab-platform"
+version = "0.1.0"
+description = "11/30 の記事：検査画像のフルサーバーレス分析基盤（CDK・AgentCore のエージェント・Lambda）"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[dependency-groups]
+cdk = ["aws-cdk-lib", "constructs"]
+agent = ["strands-agents", "bedrock-agentcore", "boto3", "pyyaml", "mcp-proxy-for-aws"]
+dev = [
+    "pytest>=8.3",
+    "vlmlab",
+]
+
+[tool.uv]
+default-groups = ["cdk", "agent", "dev"]
+package = false
+
+[tool.uv.sources]
+vlmlab = { path = "../", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "agents/inspector", "agents/analyst", "lambdas/analytics_tools"]
+addopts = "-p no:cacheprovider"

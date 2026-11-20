@@ -101,6 +101,18 @@ models:
     note: 料金ページとの照合は未
 
 # 埋め込み（条件 E。検証セッション2で使う）
+  # 11/30 の記事（platform）：Qwen3 VL 235B A22B。東京のリージョンの中だけ（Geo・Global のプロファイルなし）
+  - model_id: qwen.qwen3-vl-235b-a22b
+    service_tier: standard
+    input_per_mtok: 0.64                       # APN1-Qwen3-VL-235B-A22B-input-tokens
+    output_per_mtok: 3.22                      # APN1-Qwen3-VL-235B-A22B-output-tokens
+    cache_read_per_mtok: null
+    cache_write_per_mtok: null
+    source_url: "AWS Price List API (AmazonBedrock, ap-northeast-1) と https://aws.amazon.com/bedrock/pricing/ （一致。11/30 の記事の results/facts.md F9）"
+    checked_on: "2026-11-20"
+    model_id_source: "11/30 の記事の results/facts.md F3"
+    model_id_checked_on: "2026-11-20"
+
 embeddings:
   - model_id: amazon.nova-2-multimodal-embeddings-v1:0
     region: us-east-1                          # モデルカードの表は us-east-1（と us-gov-west-1）のみ。Geo / Global は非対応

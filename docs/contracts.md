@@ -157,3 +157,56 @@
 ### summary.py との突き合わせ（2026-11-05、利用者の許可を得て実行）
 
 - mmad_1050.csv の1,050問に、乱数（random.Random(0)、6割は正解・4割は選択肢から無作為）で答えを作り、本物の `caculate_accuracy_mmad`（commit `49db95b`）と `accuracy_table(mode="script")` に同じ答えを入れた。4データセット×7課題と平均の、すべてのセルの差の最大は 1.4e-14（浮動小数点の誤差）。読めない答えを含まない入力での確認なので、summary.py の削除の不具合（deviations.md の 17）は対象外
+
+## platform（11/30 の記事：検査画像のフルサーバーレス分析基盤）
+
+記事フォルダの `results/framing.md`（2026-11-20、subject_verdict: ready）を元にした契約。コードは `platform/`。
+
+### 決めたこと（2026-11-20、利用者が承認）
+
+| ID | 決めたこと |
+| --- | --- |
+| PL-D1 | 画像を S3 の `inbox/` に1枚置くごとに Step Functions を1回起動する（Map は使わない） |
+| PL-D2 | 検査エージェント・分析エージェントとも Strands Agents を AgentCore Runtime に直接のデプロイ（ZIP）で載せる |
+| PL-D3 | Qwen3 VL はツールなし。同じ Runtime・同じ経路を通し、ツールだけ渡さない。プロンプトは v1_judge.txt のまま |
+| PL-D4 | Claude の50枚は、100枚から品目×正解ごとに半分ずつ（13・12・13・12枚、random_state=42） |
+
+### runcfg.py（実験の設定。S3 の `run-configs/<run_name>.json`）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-PL-G1 | pre | 知らないキーがあれば止める。`run_name` は英数字・`_`・`-` だけ（S3 のキーと Athena の値に使うため） |
+| CI-PL-G2 | pre | 入力と出力の単価がどちらも null でないこと（CI-C5 と同じ）。null なら設定を作らない |
+| CI-PL-G3 | post | `run_id` は設定を作るときに1回だけ決め、同じ run_name の記録はすべて同じ run_id を持つ |
+| CI-PL-G4 | post | `prompt_sha` は 11月の `run.call_identity` と同じ作り方（`[プロンプト, null, {}]` の JSON の SHA-256 の先頭12文字）。同じプロンプトなら 11月の記録と同じ値になる |
+
+### record.py（判定の記録。S3 の `results/dt=YYYY-MM-DD/<run_name>__<image_id の / を __ にしたもの>.json`）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-PL-R1 | post | 記録は 11月の `run.make_record` と同じキーをすべて持つ（`run_name`・`run_id`・`repeat`・`image_id`・`category`・`label`・`path`・設定のキー・`service_tier_resolved`・`raw_text`・`parsed`・`parse_error`・トークン数4つ・`latency_s`・`stop_reason`・`cost_usd`・`attempts`・`api_error`・`server_latency_ms`・`timestamp`）。`repeat` は 1、`path` は S3 のキー |
+| CI-PL-R2 | post | 足すキー: `pred`・`confidence`・`defect`（CI-P のとおり読んだもの。Athena の集計用）、`n_cycles`（エージェントのターン数）、`n_tool_calls`、`used_code_interpreter`（bool）、`tools_enabled`（bool）、`runtime_session_id`、`platform_condition`。集計（`vlmlab report`）は `raw_text` を読み直すので、足したキーには頼らない |
+| CI-PL-R3 | post | トークン数は、エージェントの全ターンの合計（ツールの結果を読み込んだ分も含む）。`cost_usd` は合計に CI-C1・C2 を当てたもの |
+| CI-PL-R4 | post | エージェントが例外で止まったときは、`api_error` に例外の種類と文を入れ、`raw_text`・`parsed`・`pred` は None。それまでに使ったトークン数と費用は残す（課金されているため） |
+| CI-PL-R5 | post | 正解（`label`）はモデルに渡さない。画像のメタデータから記録にだけ入れる |
+| CI-PL-R6 | post | 記録の JSON は1行（改行なし）。Athena の JSON SerDe で1オブジェクトとして読める |
+
+### sqlbuild.py（分析のツールの SQL）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-PL-Q1 | pre | 列の名前（集計の軸・絞り込み）は決まった集合（`run_name`・`model_id`・`category`・`label`・`pred`）からだけ選べる。それ以外は ValueError（SQL を作らない） |
+| CI-PL-Q2 | post | 値は SQL の文字列に埋め込まず、Athena の ExecutionParameters（`?`）で渡す |
+| CI-PL-Q3 | pre | `limit` は 1〜50 の整数。範囲外は ValueError |
+| CI-PL-Q4 | post | どの SQL も SELECT だけ。データベースとテーブルは設定で固定し、ツールの入力では変えられない |
+| CI-PL-Q5 | post | 再現率・誤検知率は、11月の CI-M2・M3 と同じ定義（NG を陽性、`pred` が null の行は除く、分母 0 は null） |
+
+### costbreak.py（サービスごとの費用）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-PL-C1 | post | 1行 = サービス・使用量の種類・量・単位・単価・費用・出どころ（`measured` か `estimated`）・根拠。費用 = 量 × 単価 |
+| CI-PL-C2 | post | 単価が null で量が 0 より大きければ費用は None（0 にしない）。量が 0 なら 0 |
+| CI-PL-C3 | pre | 量が負なら ValueError |
+| CI-PL-C4 | post | 合計は、None の行が1つでもあれば None。1,000枚あたり = 合計 ÷ 枚数 × 1,000（枚数 0 なら None） |
+| CI-PL-C5 | post | Runtime は CPU（vCPU 時間）とメモリ（GB 時間）を別の行にする。版（V1／V2）で単価を選び、版が分からなければ止める |

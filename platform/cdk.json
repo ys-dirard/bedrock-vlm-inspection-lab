@@ -1,0 +1,5 @@
+{
+  "app": "uv run python cdk/app.py",
+  "watch": {"exclude": ["build", "dist", ".venv", "runs", "tests"]},
+  "context": {}
+}
