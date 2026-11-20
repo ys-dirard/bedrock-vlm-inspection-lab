@@ -70,33 +70,56 @@ def athena(sql: str, wg: str) -> list[dict]:
     return [dict(zip(head, [c.get("VarCharValue") for c in r["Data"]])) for r in rows[1:]]
 
 
+Num = tuple  # (値, 小数の桁数, 百分率か)
+
+
 def numbers_in(text: str) -> list[float]:
-    # 英字・/・_・- のすぐ後ろの数字（pcb1、画像 ID の 085 など）は数値として拾わない
-    return [float(x.replace(",", "").rstrip(".")) for x in re.findall(r"(?<![A-Za-z/_\-\d.])\d[\d,]*\.?\d*", text)]
+    """答えの中の数（値だけ）。英字・/・_・- のすぐ後ろの数字（pcb1、画像 ID の 085 など）は拾わない。"""
+    return [n[0] for n in _nums(text)]
+
+
+def _nums(text: str) -> list[Num]:
+    out = []
+    for m in re.finditer(r"(?<![A-Za-z/_\-\d.])(\d[\d,]*)(\.\d+)?(\s*%)?", text):
+        whole, frac, pct = m.group(1).replace(",", ""), m.group(2) or "", m.group(3)
+        out.append((float(whole + frac), max(len(frac) - 1, 0), bool(pct)))
+    return out
+
+
+def _rate_ok(truth: float, n: Num) -> bool:
+    """正解を、答えの数と同じ桁数に丸めて一致すれば合う。小数は2桁以上、百分率は1桁以上で書かれていること。
+    （正解 0.0 に 0.0842 が合う、0.14 に 0.1406 が合う、といった甘い判定をしない）"""
+    v, d, pct = n
+    target = truth * 100 if pct else truth
+    if abs(target - v) < 1e-9:
+        return True  # 正解と同じ値（0.5 と 0.5 など）は桁数によらず合う
+    if pct and d < 1 and target != round(target):
+        return False
+    if not pct and d < 2 and truth not in (0.0, 1.0):
+        return False
+    return abs(round(target, d) - v) < 1e-9
 
 
 def judge(kind: str, truth: list[dict], answer: str) -> tuple[bool, str]:
-    nums = numbers_in(answer)
+    nums = _nums(answer)
 
-    def has(v: float, tol: float) -> bool:
+    def take(pred) -> bool:
         """答えの数を1回ずつしか使わない（100 と 100 が要るときに、100 が1つでは足りない）。"""
         for i, n in enumerate(nums):
-            if abs(n - v) <= tol:
+            if pred(n):
                 del nums[i]
                 return True
         return False
 
     if kind == "ints":
         need = [int(v) for r in truth for v in r.values()]
-        return all(has(v, 0) for v in need), f"need {need}"
+        return all(take(lambda n, v=v: n[0] == v and n[1] == 0 and not n[2]) for v in need), f"need {need}"
     if kind == "rates":
-        vals = [float(v) for r in truth for k, v in r.items() if k not in ("category",) and v is not None]
-        # 0.xxx と xx.x% のどちらで書かれてもよい（小数3桁、百分率は小数1桁の丸めを許す）
-        ok = all(has(v, 0.0015) or has(v * 100, 0.15) for v in vals)
-        return ok, f"need {vals} (or %)"
+        vals = [float(v) for r in truth for k, v in r.items() if k != "category" and v is not None]
+        return all(take(lambda n, v=v: _rate_ok(v, n)) for v in vals), f"need {vals} (rounded to the answer's digits, or %)"
     if kind == "money":
         vals = [float(r["cost"]) for r in truth]
-        ok = all(has(v, max(0.0005, v * 0.01)) for v in vals)  # 1% か 0.0005 USD まで
+        ok = all(take(lambda n, v=v: not n[2] and abs(n[0] - v) <= max(0.0005, v * 0.01)) for v in vals)
         return ok, f"need {vals} (±1%)"
     if kind == "ids":
         need = {r["image_id"] for r in truth}
@@ -105,16 +128,34 @@ def judge(kind: str, truth: list[dict], answer: str) -> tuple[bool, str]:
     if kind == "best":
         r = truth[0]
         v = float(r["recall"])
-        ok = r["run_name"] in answer and (has(v, 0.0015) or has(v * 100, 0.15))
+        ok = r["run_name"] in answer and take(lambda n: _rate_ok(v, n))
         return ok, f"need {r['run_name']} {v}"
     raise ValueError(kind)
+
+
+def rescore(csv_path: Path) -> None:
+    """聞き直さずに、記録した答えと正解で採点し直す（採点の規則を直したとき）。"""
+    kinds = [k for _, _, k in QUESTIONS]
+    rows = list(csv.DictReader(csv_path.open(encoding="utf-8")))
+    for r in rows:
+        ok, why = judge(kinds[int(r["no"]) - 1], json.loads(r["truth"]), r["answer"])
+        r["correct"], r["basis"] = ok, why
+        print(r["no"], ok, why)
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    print("correct", sum(r["correct"] is True for r in rows), "/", len(rows))
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--session", default="qa-production-20261120")
+    ap.add_argument("--rescore", action="store_true", help="聞き直さずに qa_eval.csv を採点し直す")
     a = ap.parse_args()
+    if a.rescore:
+        return rescore(Path(a.out) / "qa_eval.csv")
     out = outputs()
     client = boto3.client("bedrock-agentcore", region_name=REGION)
     session = a.session.ljust(33, "0")

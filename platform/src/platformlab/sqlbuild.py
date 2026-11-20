@@ -9,7 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-COLUMNS = ("run_name", "model_id", "category", "label", "pred")  # CI-PL-Q1
+COLUMNS = ("run_name", "model_id", "category", "label", "pred")  # CI-PL-Q1（絞り込みに使える列）
+# 集計の軸に label・pred を入れると、行ごとに分母が変わって再現率・誤検知率の列が意味を持たなくなる
+# （2026-11-20 の条件 Q の v1 で、エージェントが label×pred で集計し、再現率 1.0 と答えた）。軸は次の3つだけ
+GROUP_COLUMNS = ("run_name", "model_id", "category")  # CI-PL-Q6
 MAX_LIMIT = 50
 
 
@@ -62,6 +65,9 @@ def count_by(table: str, group_by: list[str], filters: dict[str, str] | None = N
     """軸ごとの件数と、再現率・誤検知率・費用。"""
     if not group_by:
         raise ValueError("group_by must not be empty")
+    bad = [c for c in group_by if c not in GROUP_COLUMNS]
+    if bad:
+        raise ValueError(f"group_by must be chosen from {GROUP_COLUMNS} (use filters for label/pred): {bad}")
     cols = [_column(c) for c in group_by]
     where, params = _where(table, filters)
     keys = ", ".join(cols)

@@ -18,7 +18,15 @@ def test_rates_accept_decimal_or_percent():
     t = [{"recall": "0.5384615384615384", "fpr": "0.4166666666666667"}]
     assert judge("rates", t, "再現率は 0.538、誤検知率は 0.417 です。")[0]
     assert judge("rates", t, "再現率は 53.8%、誤検知率は 41.7% です。")[0]
-    assert not judge("rates", t, "再現率は 0.54、誤検知率は 0.42 です。")[0]  # 2桁の丸めは不可
+    assert judge("rates", t, "再現率は 0.54、誤検知率は 0.42 です。")[0]  # 答えの桁数で丸めて一致すればよい
+    assert not judge("rates", t, "再現率は 0.5、誤検知率は 0.4 です。")[0]  # 小数1桁は粗すぎる
+
+
+def test_rates_are_not_loose():  # 2026-11-20 の採点の誤り（0.0 に 0.0842、0.14 に 0.1406 を合うとした）
+    t = [{"recall": "0.14", "fpr": "0.0"}]
+    assert not judge("rates", t, "再現率は 0.1406（7/50）です。誤検知率は 0.0842（43/509）です。")[0]
+    assert judge("rates", t, "再現率は 0.14（7/50）、誤検知率は 0.0（0/50）です。")[0]
+    assert judge("rates", t, "再現率は 14%、誤検知率は 0% です。")[0]
 
 
 def test_rates_with_category_rows():

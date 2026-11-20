@@ -78,3 +78,11 @@ def test_runtime_lines_split_and_version():  # CI-PL-C5
     assert cb.total(lines) == pytest.approx(0.5 * 0.0895 + 10 * 0.00945)
     with pytest.raises(ValueError):
         cb.runtime_lines("inspector", 1, 1, "V3")
+
+
+def test_group_by_excludes_label_and_pred():  # CI-PL-Q6
+    for bad in (["label"], ["pred"], ["run_name", "label"]):
+        with pytest.raises(ValueError):
+            sq.count_by(T, bad)
+    q = sq.count_by(T, ["category"], {"label": "anomaly", "run_name": "p-claude"})
+    assert "GROUP BY category" in q.sql and q.params == ("'anomaly'", "'p-claude'")

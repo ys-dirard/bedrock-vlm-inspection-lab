@@ -161,7 +161,7 @@ class InspectionPlatformStack(Stack):
                 ac.ToolDefinition(name="count_by", description="軸ごとの件数・再現率・誤検知率・費用",
                                   input_schema=ac.SchemaDefinition(type=S.OBJECT, required=["group_by"], properties={
                                       "group_by": ac.SchemaDefinition(type=S.ARRAY, items=ac.SchemaDefinition(type=S.STRING),
-                                                                      description="run_name, model_id, category, label, pred から選ぶ"),
+                                                                      description="run_name, model_id, category から選ぶ（label・pred は filters で使う。tp・fp・tn・fn の列で内訳が分かる）"),
                                       "filters": filt})),
                 ac.ToolDefinition(name="list_images", description="条件に合う画像の一覧（最大50件）",
                                   input_schema=ac.SchemaDefinition(type=S.OBJECT, properties={

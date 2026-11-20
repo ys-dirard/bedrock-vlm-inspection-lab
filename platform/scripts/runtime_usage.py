@@ -1,6 +1,6 @@
 """Runtime と Code Interpreter の使用量（CloudWatch の AWS/Bedrock-AgentCore）を、時間帯ごとに集める。
 
-- 指標: CPUUsed-vCPUHours・MemoryUsed-GBHours（5分ごとの合計）。指標は30〜40分ほど遅れて出る（2026-11-20 に確認）
+- 指標: CPUUsed-vCPUHours・MemoryUsed-GBHours（1分ごとの合計）。指標は30〜40分ほど遅れて出る（2026-11-20 に確認）
 - Runtime は Name の次元（<runtime_name>::DEFAULT）で分ける。Code Interpreter は Service=AgentCore.CodeInterpreter
   （組み込みの aws.codeinterpreter.v1。アカウントで共有なので、ほかの利用と混ざらない時間帯で見る）
 - 費用は platformlab.costbreak の単価（V1）で計算する（CI-PL-C5）
@@ -42,7 +42,7 @@ def dims_for(name: str | None) -> list[list[dict]]:
 
 def total(metric: str, dims: list[dict], start: datetime, end: datetime) -> float:
     pts = cw.get_metric_statistics(Namespace=NS, MetricName=metric, Dimensions=dims, StartTime=start, EndTime=end,
-                                   Period=300, Statistics=["Sum"])["Datapoints"]
+                                   Period=60, Statistics=["Sum"])["Datapoints"]
     return sum(p["Sum"] for p in pts)
 
 

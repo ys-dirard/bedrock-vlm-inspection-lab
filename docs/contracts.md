@@ -200,6 +200,7 @@
 | CI-PL-Q3 | pre | `limit` は 1〜50 の整数。範囲外は ValueError |
 | CI-PL-Q4 | post | どの SQL も SELECT だけ。データベースとテーブルは設定で固定し、ツールの入力では変えられない |
 | CI-PL-Q5 | post | 再現率・誤検知率は、11月の CI-M2・M3 と同じ定義（NG を陽性、`pred` が null の行は除く、分母 0 は null） |
+| CI-PL-Q6 | pre | count_by の集計の軸は `run_name`・`model_id`・`category` だけ。`label`・`pred` を軸にすると行ごとに分母が変わり、再現率・誤検知率の列が意味を持たないため（2026-11-20、条件 Q の v1 の誤りから追加）。`label`・`pred` は絞り込みには使える |
 
 ### costbreak.py（サービスごとの費用）
 
