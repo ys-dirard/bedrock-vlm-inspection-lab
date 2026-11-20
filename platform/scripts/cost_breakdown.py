@@ -52,8 +52,10 @@ def pipeline_lines(cond: str, n: int, model_cost: float, rt: dict[str, dict]) ->
                                f"CloudWatch AWS/Bedrock-AgentCore（{r['start_jst']}〜{r['end_jst']}、1分ごとの合計）")
     ci = rt.get(cond + "#ci")
     if ci:
-        src = "estimated" if cond.startswith("P-idle") else "measured"
-        basis = "CloudWatch（Service=AgentCore.CodeInterpreter）" + ("。P-idle の2条件で同じ時間帯のため、枚数で半分ずつに按分" if src == "estimated" else "")
+        src = "estimated" if cond.startswith("P-idle") or cond == "P-claude" else "measured"
+        basis = {"P-claude": "CloudWatch（Service=AgentCore.CodeInterpreter）の 12:01〜12:11。閉じられなかったセッションの分を含む。P-idle の分（P-nova の1枚あたり × 20）を差し引いた",
+                 "P-idle-900": "P-nova の1枚あたりの値 × 10枚（同じ時間帯の P-claude の残りと分けられないため）",
+                 "P-idle-60": "P-nova の1枚あたりの値 × 10枚（同上）"}.get(cond, "CloudWatch（Service=AgentCore.CodeInterpreter）、条件の時間帯")
         lines += [CostLine("AgentCore Code Interpreter", "vCPU", float(ci["vcpu_hours"]), "vCPU-hour", 0.0895, src, basis),
                   CostLine("AgentCore Code Interpreter", "Memory", float(ci["gb_hours"]), "GB-hour", 0.00945, src, basis)]
     lines += [
@@ -85,14 +87,22 @@ def main() -> None:
            "P-idle-60": ("P-idle", "vlmlab_inspector_idle60")}
     raw = {(r["window"], r["resource"]): r for r in read_csv(Path(a.runtime))}
     rt = {}
+    CI = "code_interpreter(aws.codeinterpreter.v1)"
     for cond, (win, res) in use.items():
         if (win, res) in raw:
             rt[cond] = raw[(win, res)]
-        ci = raw.get((win, "code_interpreter(aws.codeinterpreter.v1)"))
-        if ci:
-            share = 0.5 if win == "P-idle" else 1.0  # P-idle は2条件で同じ時間帯（10枚ずつ）なので半分ずつ
-            rt[cond + "#ci"] = {**ci, "vcpu_hours": float(ci["vcpu_hours"]) * share,
-                                "gb_hours": float(ci["gb_hours"]) * share}
+    # Code Interpreter（アカウントで共有の組み込み。条件の時間帯で数える）
+    # - P-claude は、並列のツール呼び出しで閉じられなかったセッションが 12:10 まで残ったため（deviations.md の 12）、
+    #   12:01〜12:11 の窓（P-claude-ci）で数え、同じ時間帯に動いた P-idle の分（見積もり）を差し引く
+    # - P-idle の2条件は、P-nova の1枚あたりの値 × 10枚（同じ Nova・同じツールの使い方。見積もり）
+    nova_ci, n_nova = raw[("P-nova", CI)], 100
+    per_img = {k: float(nova_ci[k]) / n_nova for k in ("vcpu_hours", "gb_hours")}
+    for cond in ("P-nova", "P-qwen"):
+        rt[cond + "#ci"] = raw[(cond, CI)]
+    for cond in ("P-idle-900", "P-idle-60"):
+        rt[cond + "#ci"] = {k: v * 10 for k, v in per_img.items()}
+    cl = raw[("P-claude-ci", CI)]
+    rt["P-claude#ci"] = {k: float(cl[k]) - per_img[k] * 20 for k in ("vcpu_hours", "gb_hours")}
     if ("Q", "vlmlab_analyst") in raw:
         rt["Q#analyst"] = raw[("Q", "vlmlab_analyst")]
 
@@ -147,22 +157,28 @@ def main() -> None:
     per1000.append({"condition": "Q", "n_images": n_q, "total_known_usd": total(q_lines),
                     "per_1000_known_usd": per_1000(q_lines, n_q), "unknown_lines": ""})
 
-    # ログとトレース（全条件の合計。ロググループの保存量で数える）
+    # ログとトレース（全条件の合計）。ロググループの保存量（storedBytes）と IncomingBytes の指標は、Runtime のロググループで
+    # 0 のままだったため（2026-11-20）、イベントを読み、本文のバイト数 + 1件 26 バイトで数える
     logs = boto3.client("logs", region_name=REGION)
-    stored = {"runtime": 0, "spans": 0, "other": 0}
-    for page in logs.get_paginator("describe_log_groups").paginate():
-        for g in page["logGroups"]:
-            name, b = g["logGroupName"], g.get("storedBytes", 0)
-            if name.startswith("/aws/bedrock-agentcore/runtimes/vlmlab"):
-                stored["runtime"] += b
-            elif name == "aws/spans":
-                stored["spans"] += b
-            elif "Vlmlab" in name or "vlmlab" in name:
-                stored["other"] += b
-    for ln in [CostLine("CloudWatch Logs", "取り込み（Runtime のログ）", stored["runtime"] / GB, "GB", P["logs_ingest_gb"], "measured", "ロググループの保存量（保持 7日）"),
-               CostLine("CloudWatch Logs", "取り込み（Lambda・Step Functions）", stored["other"] / GB, "GB", P["logs_ingest_gb"], "measured", "同上"),
-               CostLine("CloudWatch（Transaction Search）", "スパンの取り込み", stored["spans"] / GB, "GB", P["spans_ingest_gb"], "measured",
-                        "aws/spans の保存量（アカウント全体。この記事の分がほぼすべて）")]:
+
+    def event_bytes(prefix: str) -> tuple[int, int]:
+        tot = cnt = 0
+        for g in [x["logGroupName"] for pg in logs.get_paginator("describe_log_groups").paginate(logGroupNamePrefix=prefix)
+                  for x in pg["logGroups"]]:
+            for page in logs.get_paginator("filter_log_events").paginate(logGroupName=g):
+                for e in page["events"]:
+                    tot += len(e["message"].encode("utf-8")) + 26
+                    cnt += 1
+        return tot, cnt
+
+    rt_b, rt_n = event_bytes("/aws/bedrock-agentcore/runtimes/vlmlab")
+    ot_b, ot_n = event_bytes("VlmlabInspectionPlatform")
+    sp_b, sp_n = event_bytes("aws/spans")
+    for ln in [CostLine("CloudWatch Logs", "取り込み（Runtime のログ）", rt_b / GB, "GB", P["logs_ingest_gb"], "measured",
+                        f"{rt_n} 件。うち約 95% は ADOT の gen_ai.user.message（送った画像が Base64 で入る）"),
+               CostLine("CloudWatch Logs", "取り込み（Lambda・Step Functions）", ot_b / GB, "GB", P["logs_ingest_gb"], "measured", f"{ot_n} 件"),
+               CostLine("CloudWatch（Transaction Search）", "スパンの取り込み", sp_b / GB, "GB", P["spans_ingest_gb"], "measured",
+                        f"aws/spans の {sp_n} 件（アカウント全体。この記事の分がほぼすべて）")]:
         rows.append({"condition": "共通（ログ・トレース）", **ln.to_row()})
 
     p = Path(a.out)

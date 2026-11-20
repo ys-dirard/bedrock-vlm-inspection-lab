@@ -159,3 +159,29 @@ def test_cache_tokens_are_priced():  # CI-PL-R3（キャッシュの読み書き
     rec = build_record(c, meta, out, None, "t")
     assert rec["prompt_cache"] is True
     assert abs(rec["cost_usd"] - (1000 * 0.396 + 100 * 3.311 + 10000 * 0.33 + 2000 * 4.125) / 1e6) < 1e-12
+
+
+def test_parallel_tool_calls_open_one_sandbox_and_close_it():  # deviations.md の 12（2026-11-20）
+    import threading
+    import time
+
+    made = []
+
+    class SlowSandbox(FakeSandbox):
+        def start(self, identifier=None, name=None, session_timeout_seconds=None):
+            time.sleep(0.05)  # 開くのに時間がかかる間に、2つ目の呼び出しが来る
+            return super().start(identifier, name, session_timeout_seconds)
+
+    def factory():
+        sb = SlowSandbox()
+        made.append(sb)
+        return sb
+
+    pre = Preprocessor(factory, b"T", b"R", max_calls=3)
+    ts = [threading.Thread(target=pre.run, args=(op,)) for op in ("contrast", "diff")]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    pre.close()
+    assert len(made) == 1 and made[0].stopped and len(made[0].codes) == 2 and pre.calls == 2

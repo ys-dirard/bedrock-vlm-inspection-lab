@@ -4,11 +4,15 @@
   コードはここで組み立てる（引数は検証してから JSON の値として埋め込む）
 - Code Interpreter のセッションは画像1枚ごとに開き、判定のあとで閉じる（close() を必ず呼ぶ）
 - 呼び出しの回数に上限を設け、超えたらモデルに判定を促す（費用の上限）
+- モデルが1回の応答でツールを並列に呼んでも（Claude は2つ同時がほとんど）、1枚の中では順に実行し、
+  Code Interpreter のセッションは1つだけ開く。2026-11-20 の本番（P-claude）では、並列に呼ばれたときに
+  セッションを2つ開いて1つしか閉じず、残りが上限の300秒まで課金されていた（deviations.md の 12）
 """
 
 from __future__ import annotations
 
 import json
+import threading
 from typing import Any, Callable, Protocol
 
 OPS = ("zoom", "contrast", "diff")
@@ -100,6 +104,7 @@ class Preprocessor:
         self.sandbox_used = False
         self._sb: Sandbox | None = None
         self._timeout = session_timeout_seconds
+        self._lock = threading.Lock()  # 並列のツール呼び出しを1枚の中で順にする
 
     def _sandbox(self) -> Sandbox:
         if self._sb is None:
@@ -114,6 +119,10 @@ class Preprocessor:
 
     def run(self, op: str, x: float = 0.0, y: float = 0.0, w: float = 1.0, h: float = 1.0) -> dict[str, Any]:
         """Strands のツールの本体。ToolResult の形（status と content）で返す。"""
+        with self._lock:
+            return self._run(op, x, y, w, h)
+
+    def _run(self, op: str, x: float, y: float, w: float, h: float) -> dict[str, Any]:
         if self.calls >= self.max_calls:
             return {"status": "error", "content": [{"text": f"preprocess は {self.max_calls} 回までです。これまでの画像で判定してください。"}]}
         self.calls += 1
@@ -136,8 +145,9 @@ class Preprocessor:
         ]}
 
     def close(self) -> None:
-        if self._sb is not None:
-            try:
-                self._sb.stop()
-            finally:
-                self._sb = None
+        with self._lock:
+            if self._sb is not None:
+                try:
+                    self._sb.stop()
+                finally:
+                    self._sb = None
