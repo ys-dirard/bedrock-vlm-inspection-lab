@@ -47,6 +47,14 @@ def bedrock_policy(stack: Stack, profiles: dict[str, str], in_region: list[str])
                                resources=res)
 
 
+def runtime_log_retention(scope: Construct, cid: str, rt: ac.Runtime) -> None:
+    """Runtime は作られた時点で自分のロググループを作るので、スタックではロググループを作らず、保持期間だけ設定する。
+    消すときにロググループも消す（RemovalPolicy.DESTROY）。2026-11-20 の初回のデプロイで、同じ名前の LogGroup を作って失敗したため。"""
+    logs.LogRetention(scope, cid, retention=RETENTION, removal_policy=RemovalPolicy.DESTROY,
+                      log_group_name=f"/aws/bedrock-agentcore/runtimes/{rt.agent_runtime_id}-DEFAULT"
+                      ).node.add_dependency(rt)
+
+
 class InspectionPlatformStack(Stack):
     def __init__(self, scope: Construct, cid: str, **kw) -> None:
         super().__init__(scope, cid, **kw)
@@ -114,9 +122,7 @@ class InspectionPlatformStack(Stack):
                 actions=["bedrock-agentcore:StartCodeInterpreterSession", "bedrock-agentcore:InvokeCodeInterpreter",
                          "bedrock-agentcore:StopCodeInterpreterSession", "bedrock-agentcore:GetCodeInterpreterSession"],
                 resources=[f"arn:aws:bedrock-agentcore:{self.region}:aws:code-interpreter/aws.codeinterpreter.v1"]))
-            logs.LogGroup(self, f"InspectorLogs-{name}", retention=RETENTION, removal_policy=RemovalPolicy.DESTROY,
-                          log_group_name=f"/aws/bedrock-agentcore/runtimes/{rt.agent_runtime_id}-DEFAULT"
-                          ).node.add_dependency(rt)
+            runtime_log_retention(self, f"InspectorLogs-{name}", rt)
             inspectors[name] = rt
 
         # ---- 4. 分析：Lambda（決め打ちの SQL）→ Gateway（IAM）→ 分析エージェント、Memory（短期） ----
@@ -180,9 +186,7 @@ class InspectionPlatformStack(Stack):
         memory.grant_read_short_term_memory(analyst)
         memory.grant_write(analyst)
         analyst.add_to_role_policy(bedrock_policy(self, {"jp.amazon.nova-2-lite-v1:0": "amazon.nova-2-lite-v1:0"}, []))
-        logs.LogGroup(self, "AnalystLogs", retention=RETENTION, removal_policy=RemovalPolicy.DESTROY,
-                      log_group_name=f"/aws/bedrock-agentcore/runtimes/{analyst.agent_runtime_id}-DEFAULT"
-                      ).node.add_dependency(analyst)
+        runtime_log_retention(self, "AnalystLogs", analyst)
 
         # ---- 2. Step Functions（1枚ごとに1回。PL-D1） ----
         head = tasks.CallAwsService(self, "ReadImageMetadata", service="s3", action="headObject",
@@ -220,7 +224,7 @@ class InspectionPlatformStack(Stack):
                          result_path="$.parsed")
         put = tasks.CallAwsService(self, "WriteRecord", service="s3", action="putObject",
                                    parameters={"Bucket": bucket.bucket_name, "Key.$": "$.parsed.out.results_key",
-                                               "Body.$": "$.parsed.out.record_line", "ContentType": "application/json"},
+                                               "Body.$": "States.StringToJson($.parsed.out.record_line)", "ContentType": "application/json"},
                                    iam_resources=[bucket.arn_for_objects("results/*")], iam_action="s3:PutObject",
                                    result_path=sfn.JsonPath.DISCARD)
         mark_done = tasks.DynamoUpdateItem(
