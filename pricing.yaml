@@ -80,8 +80,8 @@ models:
     service_tier: standard
     input_per_mtok: 3.30                       # APN1-MP:APN1_InputTokenCount-Units（Regional CRIS）
     output_per_mtok: 16.50                     # APN1-MP:APN1_OutputTokenCount-Units（Regional CRIS）
-    cache_read_per_mtok: null
-    cache_write_per_mtok: null
+    cache_read_per_mtok: 0.33                  # APN1-MP:APN1_CacheReadInputTokenCount-Units（2026-11-20、11/30 の記事の facts.md F9）
+    cache_write_per_mtok: 4.125                # APN1-MP:APN1_CacheWriteInputTokenCount-Units（5分の TTL。1時間は 6.60。同上）
     source_url: "AWS Price List API (AmazonBedrockFoundationModels, ap-northeast-1, publicationDate 2026-10-12)"
     checked_on: "2026-11-05"
     model_id_source: "aws bedrock list-inference-profiles --region ap-northeast-1（2026-11-05）"

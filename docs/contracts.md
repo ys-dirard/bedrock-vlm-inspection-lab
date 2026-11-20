@@ -185,7 +185,7 @@
 | ID | 種類 | 条件 |
 | --- | --- | --- |
 | CI-PL-R1 | post | 記録は 11月の `run.make_record` と同じキーをすべて持つ（`run_name`・`run_id`・`repeat`・`image_id`・`category`・`label`・`path`・設定のキー・`service_tier_resolved`・`raw_text`・`parsed`・`parse_error`・トークン数4つ・`latency_s`・`stop_reason`・`cost_usd`・`attempts`・`api_error`・`server_latency_ms`・`timestamp`）。`repeat` は 1、`path` は S3 のキー |
-| CI-PL-R2 | post | 足すキー: `pred`・`confidence`・`defect`（CI-P のとおり読んだもの。Athena の集計用）、`n_cycles`（エージェントのターン数）、`n_tool_calls`、`used_code_interpreter`（bool）、`tools_enabled`（bool）、`runtime_session_id`、`platform_condition`。集計（`vlmlab report`）は `raw_text` を読み直すので、足したキーには頼らない |
+| CI-PL-R2 | post | 足すキー: `pred`・`confidence`・`defect`（CI-P のとおり読んだもの。Athena の集計用）、`n_cycles`（エージェントのターン数）、`n_tool_calls`、`used_code_interpreter`（bool）、`tools_enabled`（bool）、`prompt_cache`（bool。2026-11-20 追加）、`runtime_session_id`、`platform_condition`。集計（`vlmlab report`）は `raw_text` を読み直すので、足したキーには頼らない |
 | CI-PL-R3 | post | トークン数は、エージェントの全ターンの合計（ツールの結果を読み込んだ分も含む）。`cost_usd` は合計に CI-C1・C2 を当てたもの |
 | CI-PL-R4 | post | エージェントが例外で止まったときは、`api_error` に例外の種類と文を入れ、`raw_text`・`parsed`・`pred` は None。それまでに使ったトークン数と費用は残す（課金されているため） |
 | CI-PL-R5 | post | 正解（`label`）はモデルに渡さない。画像のメタデータから記録にだけ入れる |

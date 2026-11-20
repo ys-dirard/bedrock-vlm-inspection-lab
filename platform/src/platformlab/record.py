@@ -105,6 +105,7 @@ def build_record(cfg: PlatformRunConfig, meta: ImageMeta, out: AgentOutcome,
         "n_tool_calls": out.n_tool_calls,
         "used_code_interpreter": out.used_code_interpreter,
         "tools_enabled": cfg.tools_enabled,
+        "prompt_cache": cfg.prompt_cache,
         "runtime_session_id": runtime_session_id,
         "platform_condition": cfg.platform_condition,
     }

@@ -48,13 +48,21 @@ def tool_calls_of(metrics: Any) -> int:
     return sum(int(getattr(m, "call_count", 0) or 0) for m in tm.values())
 
 
+def model_kwargs(cfg: PlatformRunConfig) -> dict[str, Any]:
+    kw: dict[str, Any] = dict(model_id=cfg.model_id, region_name=cfg.region, temperature=cfg.temperature,
+                              max_tokens=cfg.max_tokens, streaming=False)
+    if cfg.prompt_cache:
+        # 毎ターンの最後の user メッセージにキャッシュポイントを入れ、画像とそれまでの会話をキャッシュから読む
+        from strands.models.model import CacheConfig
+        kw["cache_config"] = CacheConfig(strategy="auto")
+    return kw
+
+
 def make_agent(cfg: PlatformRunConfig, tools: list[Any]):
     from strands import Agent
     from strands.models.bedrock import BedrockModel
 
-    model = BedrockModel(model_id=cfg.model_id, region_name=cfg.region, temperature=cfg.temperature,
-                         max_tokens=cfg.max_tokens, streaming=False)
-    return Agent(model=model, tools=tools, callback_handler=None)
+    return Agent(model=BedrockModel(**model_kwargs(cfg)), tools=tools, callback_handler=None)
 
 
 def run_judge(cfg: PlatformRunConfig, target_raw: bytes, ref_raw: bytes | None,

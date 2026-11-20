@@ -42,6 +42,7 @@ class PlatformRunConfig:
     n_refs: int = 1
     max_tool_calls: int = 3
     image_long_edge: int | None = None
+    prompt_cache: bool = False  # Strands の CacheConfig(strategy="auto")（2026-11-20 追加）
     parse: dict[str, Any] = field(default_factory=dict)
 
     @property

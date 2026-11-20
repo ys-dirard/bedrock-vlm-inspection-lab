@@ -73,7 +73,8 @@ class InspectionPlatformStack(Stack):
         cols = [("run_name", "string"), ("run_id", "string"), ("image_id", "string"), ("category", "string"),
                 ("label", "string"), ("model_id", "string"), ("prompt_version", "string"), ("pred", "string"),
                 ("confidence", "double"), ("defect", "string"), ("parse_error", "string"), ("api_error", "string"),
-                ("input_tokens", "bigint"), ("output_tokens", "bigint"), ("cost_usd", "double"),
+                ("input_tokens", "bigint"), ("output_tokens", "bigint"), ("cache_read_tokens", "bigint"),
+                ("cache_write_tokens", "bigint"), ("prompt_cache", "boolean"), ("cost_usd", "double"),
                 ("latency_s", "double"), ("n_tool_calls", "int"), ("used_code_interpreter", "boolean"),
                 ("tools_enabled", "boolean"), ("platform_condition", "string"), ("timestamp", "string")]
         results_loc = f"s3://{bucket.bucket_name}/results/"

@@ -84,6 +84,7 @@ def main() -> None:
     ap.add_argument("--condition", default="", help="記録に残す条件の名前（P-nova など）")
     ap.add_argument("--pace", type=int, default=5)
     ap.add_argument("--trailing-fence", action="store_true", help="CI-P7（Claude など）")
+    ap.add_argument("--prompt-cache", action="store_true", help="プロンプトキャッシュ（Strands の CacheConfig auto）")
     a = ap.parse_args()
 
     out = outputs()
@@ -101,7 +102,7 @@ def main() -> None:
         input_per_mtok=price.input_per_mtok, output_per_mtok=price.output_per_mtok,
         cache_read_per_mtok=price.cache_read_per_mtok, cache_write_per_mtok=price.cache_write_per_mtok,
         price_source=price.source_url, price_checked_on=price.checked_on, tools_enabled=not a.no_tools,
-        platform_condition=a.condition, image_long_edge=a.long_edge,
+        platform_condition=a.condition, image_long_edge=a.long_edge, prompt_cache=a.prompt_cache,
         parse={"allow_code_fence": True, "allow_trailing_code_fence": a.trailing_fence})
     cfg_key = f"run-configs/{a.run_name}.json"
     try:

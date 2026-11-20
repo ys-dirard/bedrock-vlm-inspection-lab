@@ -143,3 +143,19 @@ def test_encode_image_matches_november_loader(tmp_path):
     for edge in (None, 768, 2000):
         a, b = encode_image(raw, edge), load_image(p, edge)
         assert (a.data, a.format, a.width, a.height) == (b.data, b.format, b.width, b.height)
+
+
+def test_prompt_cache_only_when_configured():
+    assert "cache_config" not in judge.model_kwargs(cfg())
+    kw = judge.model_kwargs(cfg(prompt_cache=True))
+    assert kw["cache_config"].strategy == "auto"
+
+
+def test_cache_tokens_are_priced():  # CI-PL-R3（キャッシュの読み書きも費用に入れる）
+    from platformlab.record import AgentOutcome, ImageMeta, build_record
+    c = cfg(prompt_cache=True, cache_read_per_mtok=0.33, cache_write_per_mtok=4.125)
+    meta = ImageMeta("p-nova", "i", "pcb1", "normal", "k")
+    out = AgentOutcome('{"judgement": "OK"}', 1000, 100, 10000, 2000, 1.0, "end_turn", 3, 2, True)
+    rec = build_record(c, meta, out, None, "t")
+    assert rec["prompt_cache"] is True
+    assert abs(rec["cost_usd"] - (1000 * 0.396 + 100 * 3.311 + 10000 * 0.33 + 2000 * 4.125) / 1e6) < 1e-12
