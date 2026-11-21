@@ -6,7 +6,8 @@
 agentcore/
 ├── agents/inspector/   main.py（Runtime の入口。ペイロードで画像を受け取る）、judge.py（本体）、preprocess.py（Code Interpreter のツール）
 ├── src/agentlab/       AWS に依存しない部品（payload・record・runcfg・images）
-├── scripts/            build_zip.py、deploy_runtime.py（作る・確かめる・消す）、invoke_runtime.py（画像を流す）
+├── scripts/            build_zip.py、deploy_runtime.py（作る・確かめる・消す）、invoke_runtime.py（画像を流す）、
+│                       memory_check.py（12/17：戦略なしの Memory で検索できるか）、create_evaluator.py（12/18：カスタムの評価器）
 └── tests/              単体テスト（AWS は呼ばない）
 ```
 
