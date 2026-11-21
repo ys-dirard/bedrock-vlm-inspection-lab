@@ -6,6 +6,11 @@
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
+
+  学習データへの混入（12/22 の記事）
+  vlmlab noise splits                 混入ありの一覧（noise_train_420.csv）と正解（noise_truth_420.csv）を作る
+  vlmlab noise dino CONFIG [--limit N] [--dry-run]   AnomalyDINO の類似度の表（AWS は使わない）
+  vlmlab noise report --dino RUN [--nova RUN] --out DIR   発見率と、取り除いたあとの精度（API は呼ばない）
   vlmlab prefilter --scores NAME=RUN... --nova RUN --out DIR   2段構成を記録から計算する（12/10 の記事。API は呼ばない）
   vlmlab anomalydino CONFIG [--limit N]  手元の AnomalyDINO で異常度を出す（12/10 の記事。AWS は使わない。uv sync --extra anomalydino）
 
@@ -83,6 +88,29 @@ def main(argv: list[str] | None = None) -> None:
                     help="参考：2段目を替える。表示名=1枚1回の実験（例 \"Nova Pro=runs/n1_D\"）。主の解像度で計算する")
     pf.add_argument("--out", required=True)
 
+    nz = sub.add_parser("noise", help="学習データへの混入（12/22 の記事）")
+    nzsub = nz.add_subparsers(dest="ncmd", required=True)
+    nzs = nzsub.add_parser("splits")
+    nzs.add_argument("--visa-root", default="data/visa")
+    nzs.add_argument("--exclude", nargs="+", default=["data/splits/visa_test_200.csv", "data/splits/visa_wide_120.csv",
+                                                      "data/splits/visa_refs.csv"], help="使わない画像の一覧")
+    nzs.add_argument("--out", default="data/splits/noise_train_420.csv")
+    nzs.add_argument("--truth", default="data/splits/noise_truth_420.csv")
+    nzd = nzsub.add_parser("dino")
+    nzd.add_argument("config")
+    nzd.add_argument("--limit", type=int, default=None, help="試運転：品目ごとに混入ありの先頭 N 枚とテスト N 枚")
+    nzd.add_argument("--dry-run", action="store_true")
+    nzd.add_argument("--visa-root", default="data/visa")
+    nzd.add_argument("--runs-dir", default="runs")
+    nzd.add_argument("--anomalydino-root", default="third_party/AnomalyDINO")
+    nzd.add_argument("--torch-home", default="data/torch_home")
+    nzr = nzsub.add_parser("report")
+    nzr.add_argument("--dino", required=True)
+    nzr.add_argument("--nova", default=None)
+    nzr.add_argument("--truth", default="data/splits/noise_truth_420.csv")
+    nzr.add_argument("--test", default="data/splits/visa_test_200.csv")
+    nzr.add_argument("--out", required=True)
+
     m = sub.add_parser("mmad", help="MMAD の選択式の問題（11/19 の記事）")
     msub = m.add_subparsers(dest="mcmd", required=True)
     mp = msub.add_parser("prepare")
@@ -118,6 +146,8 @@ def main(argv: list[str] | None = None) -> None:
     a = p.parse_args(argv)
     if a.cmd == "mmad":
         _mmad(a)
+    elif a.cmd == "noise":
+        _noise(a)
     elif a.cmd == "fetch":
         from .data import download, extract
         tar = download(ROOT / a.raw_dir)
@@ -210,6 +240,36 @@ def main(argv: list[str] | None = None) -> None:
             print(f"{k}: {v}")
         print(f"best: {res['best']}")
 
+
+
+def _noise(a: argparse.Namespace) -> None:
+    import pandas as pd
+    if a.ncmd == "splits":
+        from .data import load_split_table
+        from .noise import make_noisy_split
+        exclude = set().union(*(set(pd.read_csv(ROOT / f)["image_id"]) for f in a.exclude))
+        run, truth = make_noisy_split(load_split_table(ROOT / a.visa_root), exclude)
+        run.to_csv(ROOT / a.out, index=False, lineterminator="\n")
+        truth.to_csv(ROOT / a.truth, index=False, lineterminator="\n")
+        print(f"split: {ROOT / a.out} ({len(run)} images)  truth: {ROOT / a.truth}")
+        print(truth.groupby(["category", "injected"]).size().to_string())
+    elif a.ncmd == "dino":
+        import os
+        os.environ["TORCH_HOME"] = str((ROOT / a.torch_home).resolve())
+        from .noise_dino import NoiseDinoConfig, execute, plan
+        cfg = NoiseDinoConfig.load(a.config)
+        if a.dry_run:
+            run_name, noisy, test = plan(cfg, ROOT, a.limit)
+            print(json.dumps({"run_name": run_name, "noisy": noisy.groupby("category").size().to_dict(),
+                              "test": test.groupby(["category", "label"]).size().to_dict().__repr__()},
+                             ensure_ascii=False, indent=2))
+            return
+        print(f"out: {execute(cfg, Path(a.config), ROOT, Path(a.visa_root), ROOT / a.runs_dir, Path(a.anomalydino_root), a.limit)}")
+    elif a.ncmd == "report":
+        from .noise import build_report
+        nova = ROOT / a.nova if a.nova else None
+        for k, v in build_report(ROOT / a.truth, ROOT / a.test, ROOT / a.dino, nova, ROOT / a.out).items():
+            print(f"{k}: {v}")
 
 def _mmad(a: argparse.Namespace) -> None:
     from .cost import PricingTable

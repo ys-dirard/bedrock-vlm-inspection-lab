@@ -146,6 +146,20 @@ uv run --extra anomalydino vlmlab prefilter \
 - `--stage2` は参考：2段目を1枚1回の別の記録に替えた表（`prefilter_summary.md` の「参考：2段目を替えた場合」）と `fig_prefilter_alt.png` を足す。解析失敗は回さない画像と同じ扱い（CI-F9・F10）
 - `prefilter_summary.csv`・`.md`（表1）、`anomalydino_scores.csv`（画像ごと）、`anomalydino_score_summary.csv`（品目ごとの AUROC と分布）、`anomalydino_time.json`、`fig_prefilter.png` を出します。定義は CI-F1〜F8
 
+## 学習データへの混入（12/22 の記事）
+
+VisA の train の良品に、評価に使っていない不良品を 5% 混ぜ、Nova 2 Lite と手元の AnomalyDINO で見つけられるかを測ります。
+
+```bash
+uv run vlmlab noise splits                                              # data/splits/noise_train_420.csv（中立の ID、正解なし）と noise_truth_420.csv（正解）
+uv run vlmlab run configs/nz1_nova2lite.yaml --limit 8                  # Nova の試運転（本番は --limit なしで420枚）
+uv run --extra anomalydino vlmlab noise dino configs/nz1_anomalydino.yaml --limit 8   # AnomalyDINO の類似度の表の試運転
+uv run --extra anomalydino vlmlab noise report --dino runs/nz1_anomalydino --nova runs/nz1_nova2lite --out results
+```
+
+- 判定に使う一覧には正解を書かず、正解は別のファイルに分けています。モデルに送るのは画像だけです
+- 定義は [docs/contracts.md](docs/contracts.md) の CI-N1〜N7
+
 ## 記録の形（runs/<name>/calls.jsonl、1行1呼び出し）
 
 | キー | 中身 |

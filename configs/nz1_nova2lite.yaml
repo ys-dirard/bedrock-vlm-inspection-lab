@@ -1,0 +1,16 @@
+# 12/22 の記事：混入ありの学習データ（420枚）を Nova 2 Lite で判定する。11/11 の条件 B と同じ見本・プロンプト・読み取り規則で1回。plan.md の手順2
+# 一覧には中立の ID と label=unknown だけを書く。どれが混入かは data/splits/noise_truth_420.csv（集計のときだけ読む）
+name: nz1_nova2lite
+split: data/splits/noise_train_420.csv
+refs: data/splits/visa_refs.csv     # 11/11 と同じ見本（ref_rank 1）。混入ありのデータとは重ならない
+n_refs: 1
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v1_judge.txt
+image_long_edge: null
+inference: {temperature: 0, maxTokens: 300}
+repeats: 1
+budget_usd: 0.4                     # 見積り約 0.17 USD（results/estimate.md）
+parse:
+  allow_code_fence: true            # n1_B と同じ

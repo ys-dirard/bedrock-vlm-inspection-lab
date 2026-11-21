@@ -1,0 +1,12 @@
+# 12/22 の記事：混入ありの学習データで、手元の AnomalyDINO の類似度の表を作る（AWS は使わない）。plan.md の手順3・5
+# 12/10 と同じ公式実装・DINOv2・解像度・背景の除去。見本は回転しない（210枚の見本を8方向にすると特徴が大きくなりすぎるため）
+name: nz1_anomalydino
+noisy_split: data/splits/noise_train_420.csv
+test_split: data/splits/visa_test_200.csv
+model_name: dinov2_vits14
+resolution: 448
+masking: true
+device: cpu
+num_threads: null
+anomalydino_commit: dd35b0f1f6ff6146d196fe4efd3457a58ebcb1e0   # dammsi/AnomalyDINO（Apache-2.0）
+dinov2_commit: 7764ea0f912e53c92e82eb78a2a1631e92725fc8        # facebookresearch/dinov2（コードと重みは Apache-2.0）
