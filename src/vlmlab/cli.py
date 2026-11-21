@@ -7,6 +7,10 @@
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
 
+  ARMBench（12/19 の記事。画像は vlmlab run --visa-root <ARMBench の根> で渡す）
+  vlmlab armbench splits --root DIR --out CSV --n-normal N --n-defect N [--splits test]
+  vlmlab armbench report RUN_DIR... --split CSV --out DIR
+
   MMAD（11/19 の記事）
   vlmlab mmad prepare                  mmad.json を取得し、data/splits/mmad_1050.csv を作り、使う画像だけ取り出す
   vlmlab mmad subsample --per-task N --out CSV     一覧をさらに減らす（record_id は元のまま）
@@ -64,6 +68,22 @@ def main(argv: list[str] | None = None) -> None:
     cs.add_argument("--embeddings", required=True, help="埋め込みの記録（例 runs/n1_E/embeddings.jsonl）")
     cs.add_argument("--out", required=True)
 
+    ab = sub.add_parser("armbench", help="ARMBench の欠陥検知（12/19 の記事）")
+    absub = ab.add_subparsers(dest="acmd", required=True)
+    abs_ = absub.add_parser("splits", help="評価に使う画像の一覧を作る（1ピック1枚、欠陥は種類ごとに均等、random_state=42）")
+    abs_.add_argument("--root", required=True, help="imagenet/ を含む置き場所（例 data/armbench/tiny/defects-image-tiny）")
+    abs_.add_argument("--train-ids", default="data/armbench/raw/train.csv")
+    abs_.add_argument("--test-ids", default="data/armbench/raw/test.csv")
+    abs_.add_argument("--splits", nargs="+", default=["test"], help="公式の分割（train / test / none）")
+    abs_.add_argument("--n-normal", type=int, required=True)
+    abs_.add_argument("--n-defect", type=int, required=True)
+    abs_.add_argument("--out", required=True)
+    abr = absub.add_parser("report", help="欠陥の種類ごとの集計（API は呼ばない）")
+    abr.add_argument("run_dirs", nargs="+")
+    abr.add_argument("--split", required=True)
+    abr.add_argument("--out", required=True)
+    abr.add_argument("--tag", default="armbench_summary")
+
     m = sub.add_parser("mmad", help="MMAD の選択式の問題（11/19 の記事）")
     msub = m.add_subparsers(dest="mcmd", required=True)
     mp = msub.add_parser("prepare")
@@ -99,6 +119,19 @@ def main(argv: list[str] | None = None) -> None:
     a = p.parse_args(argv)
     if a.cmd == "mmad":
         _mmad(a)
+    elif a.cmd == "armbench":
+        from . import armbench as ab
+        if a.acmd == "splits":
+            table = ab.scan_imagenet(ROOT / a.root, ab.read_pick_ids(ROOT / a.train_ids), ab.read_pick_ids(ROOT / a.test_ids))
+            print(table.groupby(["split", "defect_type"]).size().to_string())
+            out = ab.sample(table, a.n_normal, a.n_defect, tuple(a.splits))
+            (ROOT / a.out).parent.mkdir(parents=True, exist_ok=True)
+            out.to_csv(ROOT / a.out, index=False, lineterminator="\n")
+            print(f"split: {ROOT / a.out} ({len(out)} images)")
+            print(out.groupby(["split", "defect_type"]).size().to_string())
+        else:
+            for k, v in ab.build_report(a.run_dirs, ROOT / a.split, ROOT / a.out, a.tag).items():
+                print(f"{k}: {v}")
     elif a.cmd == "fetch":
         from .data import download, extract
         tar = download(ROOT / a.raw_dir)

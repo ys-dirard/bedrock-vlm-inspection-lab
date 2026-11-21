@@ -1,0 +1,10 @@
+image_id,category,label,split,path,defect_type,pick_id,view
+multi_pick/009022001652099684534_4,armbench,anomaly,test,imagenet/test/multi_pick/009022001652099684534_4.jpg,multi_pick,009022001652099684534,4
+multi_pick/003079001656992144116_2,armbench,anomaly,test,imagenet/test/multi_pick/003079001656992144116_2.jpg,multi_pick,003079001656992144116,2
+multi_pick/003048001652247875772_4,armbench,anomaly,train,imagenet/test/multi_pick/003048001652247875772_4.jpg,multi_pick,003048001652247875772,4
+package_defect/003009001653536935889_3,armbench,anomaly,test,imagenet/test/package_defect/003009001653536935889_3.jpg,package_defect,003009001653536935889,3
+package_defect/011018001655779224096_4,armbench,anomaly,train,imagenet/test/package_defect/011018001655779224096_4.jpg,package_defect,011018001655779224096,4
+package_defect/006098001657024867539_1,armbench,anomaly,test,imagenet/test/package_defect/006098001657024867539_1.jpg,package_defect,006098001657024867539,1
+nominal/006046001665059611687_3,armbench,normal,none,imagenet/test/nominal/006046001665059611687_3.jpg,nominal,006046001665059611687,3
+nominal/014009001652277336752_1,armbench,normal,none,imagenet/test/nominal/014009001652277336752_1.jpg,nominal,014009001652277336752,1
+nominal/008018001651667445070_3,armbench,normal,train,imagenet/test/nominal/008018001651667445070_3.jpg,nominal,008018001651667445070,3

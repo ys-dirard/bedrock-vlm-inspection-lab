@@ -32,3 +32,23 @@ mkdir -p data/visa && tar -xf data/raw/VisA_20220922.tar -C data/visa
 | `visa_wide_120.csv` | 品目の広がりを見るとき。12品目 × test の良品5枚・不良品5枚（計120枚） |
 
 列は `image_id, category, label, split, path`（`path` は VisA の根からの相対パス）です。抽出はすべて `pandas.DataFrame.sample(n, random_state=42)` です。
+
+## ARMBench（12/19 の記事）
+
+- 出典: ARMBench（Amazon、CC BY 4.0、http://armbench.com 、arXiv:2303.16382）。配布は Hugging Face の `amazon/armbench-defect-image`（ゲートなし）
+- 本体 `archive/armbench-defects-image-0.1.tar.gz` は 70,571,002,037 バイト（65.7 GiB）。gzip なので一部だけは取り出せない
+- 試運転では、同じ所の見本 `archive/armbench-defects-tiny.tar.gz`（69,609,824 バイト、52枚）と公式の分割 `annotations/train.csv`・`test.csv` を使った
+
+```bash
+mkdir -p data/armbench/raw data/armbench/tiny
+B=https://huggingface.co/datasets/amazon/armbench-defect-image/resolve/main
+curl -L -o data/armbench/raw/armbench-defects-tiny.tar.gz $B/archive/armbench-defects-tiny.tar.gz
+curl -L -o data/armbench/raw/train.csv $B/annotations/train.csv
+curl -L -o data/armbench/raw/test.csv  $B/annotations/test.csv
+tar xzf data/armbench/raw/armbench-defects-tiny.tar.gz -C data/armbench/tiny
+uv run vlmlab armbench splits --root data/armbench/tiny/defects-image-tiny --splits train test none \
+  --n-normal 3 --n-defect 6 --out data/splits/armbench_tiny_trial.csv
+uv run vlmlab run configs/ab0_tiny_nova2lite.yaml --visa-root data/armbench/tiny/defects-image-tiny
+```
+
+- `data/armbench/` は .gitignore に入れている

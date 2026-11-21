@@ -1,0 +1,14 @@
+# 12/19 の記事（試運転）：ARMBench の欠陥検知を Claude Haiku 4.5 で判定する（見本なし、1回、長辺768px）。plan.md の手順4
+name: ab0_tiny_haiku45
+split: data/splits/armbench_tiny_trial.csv   # 試運転：公式の見本（tiny、52枚）から9枚
+model_id: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/armbench_v1_judge.txt
+image_long_edge: 768
+inference: {temperature: 0, maxTokens: 300}
+repeats: 1
+budget_usd: 0.6                     # 見積り 0.25 USD（results/estimate.md）
+parse:
+  allow_code_fence: true
+  allow_trailing_code_fence: true   # 11/26 の n3_claude_refB と同じ読み取り規則（CI-P7）

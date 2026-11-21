@@ -19,3 +19,6 @@ __pycache__/
 
 # MMAD（問題の JSON と画像。data/splits/mmad_1050.csv だけコミットする）
 data/mmad/
+
+# ARMBench（12/19 の記事。data/README.md の手順で取得する。CC BY 4.0）
+data/armbench/
