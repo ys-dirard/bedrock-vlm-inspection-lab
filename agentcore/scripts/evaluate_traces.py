@@ -11,6 +11,8 @@
   uv run python scripts/evaluate_traces.py --records runs/agentcore/ci-haiku-tools.jsonl --limit 1 --budget 0.5
   （--evaluator は既定で vlmlab_reason_consistency。組み込みなら --evaluator Builtin.Correctness --kind builtin）
 出力: runs/agentcore/eval/<records の名前>__<評価器>.jsonl（1行1結果）
+区切って流し直せる（CI-AC-S5・S6）：--run-id で記録を絞り、この評価器でエラーなく評価できたセッションは飛ばす。
+--budget はこれまでの結果の費用を含めた上限。--max-new で1回に評価する件数を区切る（--limit は対象の先頭 N 件）
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from agentlab.evalcost import eval_cost  # noqa: E402
+from agentlab.evalresume import evaluated, select_targets  # noqa: E402
 from agentlab.spans import assert_text_only, strip_images  # noqa: E402
 
 REGION = "ap-northeast-1"
@@ -69,10 +72,12 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=1)
     ap.add_argument("--budget", type=float, required=True)
     ap.add_argument("--first-guard", type=float, default=0.48)
+    ap.add_argument("--run-id", help="この run_id の記録だけを評価する")
+    ap.add_argument("--max-new", type=int, help="この実行で新しく評価する件数の上限")
     a = ap.parse_args()
 
     recs = [json.loads(line) for line in Path(a.records).read_text(encoding="utf-8").splitlines() if line.strip()]
-    recs = [r for r in recs if r.get("runtime_session_id")][: a.limit]
+    recs = select_targets(recs, a.run_id)[: a.limit]
     ctl = boto3.client("bedrock-agentcore-control", region_name=REGION)
     dp = boto3.client("bedrock-agentcore", region_name=REGION)
     evaluator_id, kind, judge_model = resolve_evaluator(ctl, a.evaluator)
@@ -85,7 +90,12 @@ def main() -> None:
     out_dir = ROOT / "runs" / "agentcore" / "eval" / Path(a.records).stem
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir.parent / f"{Path(a.records).stem}__{a.evaluator.replace('.', '_')}.jsonl"
-    total, worst = 0.0, 0.0
+    prev = [json.loads(x) for x in out.read_text(encoding="utf-8").splitlines() if x.strip()] if out.exists() else []
+    done, total, worst = evaluated(prev, a.evaluator)
+    recs = [r for r in recs if r["runtime_session_id"] not in done]
+    if a.max_new is not None:
+        recs = recs[: a.max_new]
+    print(f"done={len(done)} todo_now={len(recs)} prior_cost={total:.4f}")
     with out.open("a", encoding="utf-8", newline="\n") as f:
         for r in recs:
             guard = worst if worst > 0 else a.first_guard
