@@ -14,6 +14,12 @@
   vlmlab mmad batch-prepare CONFIG                   バッチ推論の入力（JSONL）を作る
   vlmlab mmad batch-collect CONFIG OUT_FILE... [--job-arn ARN]   バッチの出力を記録にする
   vlmlab mmad report RUN_DIR... --out DIR
+
+  人の確認（12/14 の記事。infra/human_review の構成を使う）
+  vlmlab review split                  data/splits/visa_review_20.csv を作る（品目×正解ごとに5枚）
+  vlmlab review start --bucket B --state-machine ARN --tag T [--limit N] [--dry-run]   画像を上げて実行を始める
+  vlmlab review export --table T --tag T --out results/run_log.csv   記録を run_log.csv にする
+  vlmlab review proxy --url FUNCTION_URL                              確認画面の署名プロキシ（127.0.0.1）
 """
 
 from __future__ import annotations
@@ -96,9 +102,40 @@ def main(argv: list[str] | None = None) -> None:
     mrep.add_argument("--out", required=True)
     mrep.add_argument("--subset", default=None, help="この一覧（CSV）の record_id だけで集計する")
 
+    rv = sub.add_parser("review", help="人の確認（12/14 の記事）")
+    rsub = rv.add_subparsers(dest="rcmd", required=True)
+    rs = rsub.add_parser("split")
+    rs.add_argument("--src", default="data/splits/visa_test_200.csv")
+    rs.add_argument("--out", default="data/splits/visa_review_20.csv")
+    rst = rsub.add_parser("start")
+    rst.add_argument("--split", default="data/splits/visa_review_20.csv")
+    rst.add_argument("--refs", default="data/splits/visa_refs.csv")
+    rst.add_argument("--visa-root", default="data/visa")
+    rst.add_argument("--bucket", required=True)
+    rst.add_argument("--state-machine", required=True)
+    rst.add_argument("--tag", required=True, help="実行名の頭（例 ac14-trial）")
+    rst.add_argument("--region", default="ap-northeast-1")
+    rst.add_argument("--limit", type=int, default=None)
+    rst.add_argument("--dry-run", action="store_true")
+    rst.add_argument("--runs-dir", default="runs")
+    rex = rsub.add_parser("export")
+    rex.add_argument("--table", required=True)
+    rex.add_argument("--tag", required=True)
+    rex.add_argument("--split", default="data/splits/visa_review_20.csv")
+    rex.add_argument("--out", required=True)
+    rex.add_argument("--pricing", default="pricing.yaml")
+    rex.add_argument("--model-id", default="jp.amazon.nova-2-lite-v1:0")
+    rex.add_argument("--region", default="ap-northeast-1")
+    rpx = rsub.add_parser("proxy")
+    rpx.add_argument("--url", required=True)
+    rpx.add_argument("--region", default="ap-northeast-1")
+    rpx.add_argument("--port", type=int, default=8765)
+
     a = p.parse_args(argv)
     if a.cmd == "mmad":
         _mmad(a)
+    elif a.cmd == "review":
+        _review(a)
     elif a.cmd == "fetch":
         from .data import download, extract
         tar = download(ROOT / a.raw_dir)
@@ -151,6 +188,37 @@ def main(argv: list[str] | None = None) -> None:
         for k, v in write_outputs(res, a.out).items():
             print(f"{k}: {v}")
         print(f"best: {res['best']}")
+
+
+def _review(a: argparse.Namespace) -> None:
+    import pandas as pd
+
+    from .review import driver
+    if a.rcmd == "split":
+        out = driver.make_review_split(pd.read_csv(ROOT / a.src))
+        out.to_csv(ROOT / a.out, index=False, lineterminator="\n")
+        print(f"{a.out}: {len(out)} images {out.groupby(['category', 'label']).size().to_dict()}")
+    elif a.rcmd == "start":
+        split = pd.read_csv(ROOT / a.split)
+        if a.limit:
+            split = split.head(a.limit)
+        plan = driver.plan_start(split, pd.read_csv(ROOT / a.refs), a.tag)
+        if a.dry_run:
+            print(json.dumps([{"name": p["name"], "input": p["input"]} for p in plan], ensure_ascii=False, indent=2))
+            return
+        started = driver.start(plan, Path(a.visa_root), a.bucket, a.state_machine, a.region)
+        out = ROOT / a.runs_dir / f"review_{a.tag}" / "started.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(started, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"started {len(started)} executions -> {out}")
+    elif a.rcmd == "export":
+        from .cost import PricingTable
+        price = PricingTable.load(ROOT / a.pricing).get(a.model_id)
+        summary = driver.write_run_log(driver.scan_all(a.table, a.region), pd.read_csv(ROOT / a.split), price,
+                                       Path(a.out), a.tag)
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+    elif a.rcmd == "proxy":
+        driver.serve_proxy(a.url, a.region, a.port)
 
 
 def _mmad(a: argparse.Namespace) -> None:

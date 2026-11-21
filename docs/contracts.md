@@ -157,3 +157,7 @@
 ### summary.py との突き合わせ（2026-11-05、利用者の許可を得て実行）
 
 - mmad_1050.csv の1,050問に、乱数（random.Random(0)、6割は正解・4割は選択肢から無作為）で答えを作り、本物の `caculate_accuracy_mmad`（commit `49db95b`）と `accuracy_table(mode="script")` に同じ答えを入れた。4データセット×7課題と平均の、すべてのセルの差の最大は 1.4e-14（浮動小数点の誤差）。読めない答えを含まない入力での確認なので、summary.py の削除の不具合（deviations.md の 17）は対象外
+
+## review（12/14 の記事：人の確認を挟む構成）
+
+契約 CI-HR1〜HR16・CI-IR1〜IR7 と、問題の整理・後片付けは `docs/human_review.md` にあります。

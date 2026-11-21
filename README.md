@@ -173,3 +173,14 @@ uv run vlmlab mmad report runs/... --out results644 --subset data/splits/mmad_64
 - 設定は `configs/m1_*.yaml`。Claude は Messages API の本文（InvokeModel）、Nova 2 Lite は Converse で呼びます
 - `vlmlab mmad batch-prepare` / `batch-collect` はバッチ推論用ですが、アカウントでバッチ推論が許可されておらず、ジョブでは試せていません
 - 問題と画像はコミットしていません。MMAD は研究目的での利用とされています。画像の元のデータセット（MVTec AD・MVTec LOCO・VisA・GoodsAD など）のライセンスにも従ってください
+
+## 人の確認を挟む構成（12/14 の記事）
+
+Step Functions のタスクトークンで、人の確認が要る画像だけ確認を待つ構成です。CDK（Python）は `infra/human_review/`、Lambda のコードは `src/vlmlab/review/`、契約と後片付けは `docs/human_review.md` にあります。
+
+```bash
+uv run vlmlab review split                     # data/splits/visa_review_20.csv（品目×正解ごとに5枚）
+cd infra/human_review && uv sync && uv run pytest   # 構成のテスト（synth だけ。AWS は呼ばない）
+```
+
+- デプロイすると S3・DynamoDB・Lambda・Step Functions などができます。使い終わったら `docs/human_review.md` の「後片付け」で消してください

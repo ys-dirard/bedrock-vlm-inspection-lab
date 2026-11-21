@@ -1,0 +1,19 @@
+[project]
+name = "human-review-infra"
+version = "0.1.0"
+description = "12/14 の記事：グレーな画像だけ人の確認を待つ Step Functions の構成（CDK）"
+requires-python = ">=3.11"
+dependencies = [
+    "aws-cdk-lib>=2.200,<3",
+    "constructs>=10.4,<11",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
