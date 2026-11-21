@@ -1,0 +1,16 @@
+# 12/15 の記事：MVTec LOCO AD、Claude Haiku 4.5、良品の見本1枚、長辺768px、プロンプトは11/11 と同じ版。plan.md の手順3
+name: ac15_haiku_v1
+split: data/splits/mvtec_loco_200.csv
+refs: data/splits/mvtec_loco_200_refs.csv
+n_refs: 1
+model_id: jp.anthropic.claude-haiku-4-5-20251001-v1:0   # JP Geo（東京の単価、オンデマンド）
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v1_judge.txt
+image_long_edge: 768                    # 見本・検査対象とも長辺をそろえて縮める（12/5 の H-768 と同じ）
+inference: {temperature: 0, maxTokens: 300}
+repeats: 1
+budget_usd: 0.8                         # 200回の見込み 0.33 USD（画像が正方形でも 0.43 USD）、出力が上限の300トークンでも 0.73 USD
+parse:
+  allow_code_fence: true                # ac05_H768（12/5）と同じ読み取り規則
+  allow_trailing_code_fence: true

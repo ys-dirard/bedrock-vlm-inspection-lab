@@ -1,0 +1,15 @@
+# 12/15 の記事：MVTec LOCO AD、Nova 2 Lite、良品の見本1枚、プロンプトは11/11 と同じ版。plan.md の手順3
+name: ac15_nova_v1
+split: data/splits/mvtec_loco_200.csv
+refs: data/splits/mvtec_loco_200_refs.csv
+n_refs: 1
+model_id: jp.amazon.nova-2-lite-v1:0     # JP Geo（東京の単価、オンデマンド）
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v1_judge.txt
+image_long_edge: null                   # 原寸（Nova 2 Lite は画像1枚230トークンで課金）
+inference: {temperature: 0, maxTokens: 300}
+repeats: 1
+budget_usd: 0.3                         # 200回の見込み 0.07 USD、出力が上限の300トークンでも 0.25 USD
+parse:
+  allow_code_fence: true                # n1_B と同じ読み取り規則
