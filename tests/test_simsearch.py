@@ -83,4 +83,6 @@ def test_evaluate_counts_relevant_by_category_and_type(tmp_path):
     assert allrow.at["anomaly_only", "hit_at_2"] == 1 and allrow.at["anomaly_only", "precision_at_2"] == 0.5
     assert allrow.at["with_normals", "normals_in_top2"] == 1   # 良品 n1 が1位
     assert allrow.at["with_normals", "chance_precision_at_2"] == 0.25
+    assert allrow.at["with_normals", "chance_precision_at_2_in_category"] == pytest.approx(1 / 3)  # 品目 c は3件
+    assert allrow.at["anomaly_only", "chance_precision_at_2_in_category"] == 0.5
     assert set(res.variant) == {"anomaly_only", "with_normals"}

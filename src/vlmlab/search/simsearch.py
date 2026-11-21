@@ -142,11 +142,14 @@ def evaluate(split: pd.DataFrame, index_emb: Path, query_emb: Path, k: int = 5) 
                 "n_relevant": len(relevant), "n_candidates": len(ids),
                 f"chance_precision_at_{k}": chance_precision(len(relevant), len(ids)),
                 f"chance_hit_at_{k}": chance_hit_at_k(len(relevant), len(ids), k),
+                # 同じ品目の中からでたらめに選んだときの期待値（検索がほぼ同じ品目を返すので、こちらとも比べる）
+                f"chance_precision_at_{k}_in_category": chance_precision(len(relevant), int((idx.category == cat).sum())),
                 "search_ms_per_query": search_ms,
             })
     pq = pd.DataFrame(per_query)
     metrics = ["hit_at_1", f"hit_at_{k}", f"precision_at_{k}", "rr", f"same_category_at_{k}",
-               f"normals_in_top{k}", f"chance_precision_at_{k}", f"chance_hit_at_{k}"]
+               f"normals_in_top{k}", f"chance_precision_at_{k}", f"chance_hit_at_{k}",
+               f"chance_precision_at_{k}_in_category"]
     overall = pq.groupby("variant", sort=False)[metrics].mean().reset_index().assign(category="(all)")
     by_cat = pq.groupby(["variant", "category"], sort=False)[metrics].mean().reset_index()
     n = pq.groupby(["variant"], sort=False).size().rename("n_queries").reset_index()
