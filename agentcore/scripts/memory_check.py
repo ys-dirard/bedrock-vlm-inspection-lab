@@ -3,7 +3,8 @@
 作るもの（12/17 の results/resources_plan.md の段階1。2026-11-21 書き手が承認）:
 - AgentCore Memory vlmlabCaseMemory（戦略なし、実行ロールなし、eventExpiryDuration 7、indexedKeys: category・judgement）
 
-確かめる記録は、確認用の短い文5件（データの事実ではない）を名前空間 /cases/check/ に入れる。7日で消える設定にする。
+確かめる記録は、確認用の短い文5件（データの事実ではない）を名前空間 /cases/check/ に入れる。31日で消える設定にする
+（recordExpiryDurationDays の下限は 31。2026-11-21 に 7 で ParamValidationError になったため直した）。
 費用の見込み: 保存 5件 × 0.00075 USD／件・月 未満、取り出し 3回 × 0.0005 USD = 0.0015 USD
 
   uv run python scripts/memory_check.py create     # Memory を作り、ACTIVE まで待つ
@@ -21,6 +22,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import boto3
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from agentlab.memstore import batch_create_request, retrieve_request  # noqa: E402
 
 REGION = "ap-northeast-1"
 NAME = "vlmlabCaseMemory"
@@ -77,24 +81,17 @@ def check() -> None:
         sys.exit("memory is not ACTIVE")
     dp = boto3.client("bedrock-agentcore", region_name=REGION)
     now = datetime.now(timezone.utc)
-    recs = [{"requestIdentifier": rid, "namespaces": [NS], "content": {"text": text}, "timestamp": now,
-             "metadata": {"category": {"stringValue": cat}, "judgement": {"stringValue": j}}}
-            for rid, cat, j, text in CHECK_RECORDS]
-    created = dp.batch_create_memory_records(memoryId=m["id"], records=recs,
-                                             recordExpirySpecification={"recordExpiryDurationDays": 7,
-                                                                        "action": "REMOVE"})
+    req = batch_create_request(m["id"], NS, [{"id": rid, "text": text, "metadata": {"category": cat, "judgement": j}}
+                                             for rid, cat, j, text in CHECK_RECORDS], now)
+    created = dp.batch_create_memory_records(**req)
     result = {"memory_id": m["id"], "batch_create": {k: v for k, v in created.items() if k != "ResponseMetadata"},
               "retrievals": []}
     time.sleep(20)  # 索引に入るまで待つ
     listed = dp.list_memory_records(memoryId=m["id"], namespace=NS)
     result["listed"] = len(listed.get("memoryRecordSummaries", []))
     for q, cat in QUERIES:
-        crit = {"searchQuery": q, "topK": 3}
-        if cat:
-            crit["metadataFilters"] = [{"left": {"metadataKey": "category"}, "operator": "EQUALS_TO",
-                                        "right": {"metadataValue": {"stringValue": cat}}}]
         try:
-            r = dp.retrieve_memory_records(memoryId=m["id"], namespace=NS, searchCriteria=crit)
+            r = dp.retrieve_memory_records(**retrieve_request(m["id"], NS, q, 3, cat))
             hits = [{"text": h["content"].get("text"), "score": h.get("score"), "metadata": h.get("metadata")}
                     for h in r.get("memoryRecordSummaries", [])]
             result["retrievals"].append({"query": q, "category_filter": cat, "hits": hits})
