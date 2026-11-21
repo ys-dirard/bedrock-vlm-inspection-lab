@@ -7,6 +7,9 @@
 - 記録は runs/agentcore/<run_name>.jsonl に1行ずつ追記する（11月と同じキー。Runtime は何も保存しない）
 - 呼ぶ前に「この run の累計 + これまでで最も高かった1枚（最初は --first-guard）」が --budget を超えるなら止める
 - 単価は lab の pricing.yaml（null なら止める＝CI-C5）
+- 途中から流し直せる（CI-AC-R1〜R4）：同じ run_name の記録があれば、設定が同じことを確かめ（違えば呼ぶ前に止める）、
+  前の run_id を引き継ぎ、成功した画像を飛ばす。--budget はその run_id のこれまでの費用を含めた上限。
+  --max-new で1回に呼ぶ枚数を区切れる（フォアグラウンドで10分以内に収めるため。2026-11-21 の本番の反省）
 
   uv run python scripts/invoke_runtime.py --run-name ci-haiku-tools-trial --split ../data/splits/visa_platform_claude50.csv \
       --limit 5 --model jp.anthropic.claude-haiku-4-5-20251001-v1:0 --long-edge 768 --prompt-cache \
@@ -31,6 +34,7 @@ LAB = ROOT.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from agentlab.payload import build_payload  # noqa: E402
+from agentlab.resume import load_records, resume  # noqa: E402
 from agentlab.runcfg import new_run_config  # noqa: E402
 from vlmlab.cost import PricingTable  # noqa: E402
 
@@ -66,6 +70,7 @@ def main() -> None:
     ap.add_argument("--prompt-cache", action="store_true")
     ap.add_argument("--prompt", default=None, help="既定はツールありなら v1_agent、なしなら v1_judge")
     ap.add_argument("--stop-delay", type=float, default=15.0, help="StopRuntimeSession の前に待つ秒数")
+    ap.add_argument("--max-new", type=int, help="この実行で新しく呼ぶ枚数の上限")
     ap.add_argument("--trailing-fence", action="store_true", default=True)
     a = ap.parse_args()
 
@@ -95,9 +100,18 @@ def main() -> None:
     arn = runtime_arn(ctl)
     out = ROOT / "runs" / "agentcore" / f"{a.run_name}.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)
-    total, worst, errors = 0.0, 0.0, 0
+    records = load_records(out)
+    cfg, done = resume(cfg, records)  # 設定が前の記録と違えば ValueError で止まる（CI-AC-R2）
+    prior = [r for r in records if r["run_id"] == cfg.run_id]
+    total = sum(r.get("cost_usd") or 0.0 for r in prior)
+    worst = max([r.get("cost_usd") or 0.0 for r in prior], default=0.0)
+    todo = split[[(i, 1) not in done for i in split["image_id"]]]
+    if a.max_new is not None:
+        todo = todo.head(a.max_new)
+    print(f"run_id={cfg.run_id} done={len(done)} todo_now={len(todo)} prior_cost={total:.4f}")
+    errors = 0
     with out.open("a", encoding="utf-8", newline="\n") as f:
-        for _, row in split.iterrows():
+        for _, row in todo.iterrows():
             guard = worst if worst > 0 else a.first_guard
             if total + guard > a.budget:
                 print(f"STOP before {row.image_id}: total {total:.4f} + guard {guard:.4f} > budget {a.budget}")

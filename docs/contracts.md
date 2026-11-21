@@ -191,3 +191,12 @@
 | CI-AC-P4 | pre | image_b64 は厳密な Base64 で、空でないバイト列になる |
 | CI-AC-P5 | pre | ref_b64 は run_config.n_refs > 0 のときだけ必須で、n_refs が 0 のときに渡されたら止める |
 | CI-AC-P6 | post | ペイロードが条件を満たさないとき、入口は {"error": ...} を返し、モデルも Code Interpreter も呼ばない |
+
+### resume.py（流し直し。2026-11-22、12/16 の本番で35枚を呼び直した反省）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-AC-R1 | post | 同じ run_name の記録が無ければ、設定はそのまま（新しい run_id） |
+| CI-AC-R2 | pre | 記録があれば、結果を左右する設定（11月の identity のキーと tools_enabled・prompt_cache・platform_condition）と run_name がすべての記録と同じでなければ、呼ぶ前に止める |
+| CI-AC-R3 | post | api_error の無い記録の (image_id, repeat) は呼ばない。api_error のあった画像は流し直す |
+| CI-AC-R4 | post | 最後の記録の run_id を引き継ぐ。--budget は、その run_id のこれまでの費用を含めた上限 |
