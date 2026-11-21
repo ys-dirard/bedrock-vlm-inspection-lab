@@ -81,3 +81,16 @@ def assert_text_only(spans: list[dict[str, Any]]) -> int:
     if left:
         raise ValueError(f"image-like content remains at {left[:5]} ({len(left)} places)")
     return len(json.dumps(spans, ensure_ascii=False).encode("utf-8"))
+
+
+STRANDS_SCOPE = "strands.telemetry.tracer"
+
+
+def missing_events(spans: list[dict[str, Any]]) -> list[str]:
+    """CI-AC-S7。Strands のスパン（chat・execute_tool・execute_event_loop_cycle・invoke_agent）のうち、
+    同じ spanId のイベント（本文 body のある記録）が無いものの名前。1つでもあれば評価は
+    「Session span data is incomplete」で失敗する（2026-11-22 の 12/18 の本番で、29件中10件）。"""
+    with_events = {s.get("spanId") for s in spans if "body" in s}
+    return [s["name"] for s in spans
+            if "name" in s and (s.get("scope") or {}).get("name") == STRANDS_SCOPE
+            and s.get("spanId") not in with_events]

@@ -202,3 +202,4 @@
 | CI-AC-S4 | post | 組み込みの評価器の費用 = 入力 × 2.40 ＋ 出力 × 12.00（USD／100万トークン、モデル代込み）。カスタムの評価器の費用 = 0.0015 USD／回 ＋ 判定のモデルのトークン数 × そのモデルの単価。モデルの単価が無ければ費用を決めない（CI-C5） |
 | CI-AC-S5 | pre | 評価する記録は、--run-id で絞り（指定時）、Runtime のセッション ID があり api_error の無いもの。同じ image_id が2つあれば止める |
 | CI-AC-S6 | post | 同じ評価器でエラーなく評価できたセッションは評価しない。--budget はこれまでの結果の費用を含めた上限 |
+| CI-AC-S7 | pre | 評価を呼ぶ前に、Strands のスパン（chat・execute_tool・execute_event_loop_cycle・invoke_agent）に同じ spanId のイベントがそろっているかを調べ、欠けていれば評価を呼ばずに skipped として記録する（Evaluate は「Session span data is incomplete」で失敗するため。2026-11-22） |

@@ -25,3 +25,8 @@ def test_evaluated_skips_only_successes():  # CI-AC-S6
     done, total, worst = evaluated(res, "e")
     assert done == {"a"} and total == pytest.approx(0.005) and worst == pytest.approx(0.005)
     assert evaluated([], "e") == (set(), 0.0, 0.0)
+
+
+def test_skipped_counts_as_done():  # CI-AC-S6
+    res = [{"evaluator": "e", "session_id": "x", "cost_usd": 0.0, "error": "incomplete", "skipped": True}]
+    assert evaluated(res, "e")[0] == {"x"}

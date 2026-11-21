@@ -67,3 +67,14 @@ def test_eval_cost():  # CI-AC-S4
         eval_cost("custom", 1, 1)  # 判定のモデルの単価が無ければ費用を決めない
     with pytest.raises(ValueError):
         eval_cost("other", 1, 1)
+
+
+def test_missing_events():  # CI-AC-S7
+    from agentlab.spans import missing_events
+    sc = {"name": "strands.telemetry.tracer"}
+    spans = [{"spanId": "a", "name": "chat", "scope": sc}, {"spanId": "b", "name": "execute_tool preprocess", "scope": sc},
+             {"spanId": "c", "name": "Bedrock AgentCore.InvokeCodeInterpreter", "scope": {"name": "botocore"}},
+             {"spanId": "a", "body": {"x": 1}, "scope": sc}]
+    assert missing_events(spans) == ["execute_tool preprocess"]
+    spans.append({"spanId": "b", "body": {}, "scope": sc})
+    assert missing_events(spans) == []

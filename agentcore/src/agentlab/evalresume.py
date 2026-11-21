@@ -17,8 +17,9 @@ def select_targets(records: list[dict[str, Any]], run_id: str | None) -> list[di
 
 
 def evaluated(results: list[dict[str, Any]], evaluator: str) -> tuple[set[str], float, float]:
-    """CI-AC-S6。この評価器で、エラーなく評価できたセッション、これまでの費用の合計と最大。"""
+    """CI-AC-S6。この評価器で、エラーなく評価できたか、スパンが欠けていて評価しなかった（skipped）セッション、
+    これまでの費用の合計と最大。"""
     mine = [r for r in results if r.get("evaluator") == evaluator]
-    done = {r["session_id"] for r in mine if not r.get("error")}
+    done = {r["session_id"] for r in mine if not r.get("error") or r.get("skipped")}
     costs = [r.get("cost_usd") or 0.0 for r in mine]
     return done, sum(costs), max(costs, default=0.0)

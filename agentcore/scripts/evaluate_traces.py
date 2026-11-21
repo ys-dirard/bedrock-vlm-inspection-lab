@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from agentlab.evalcost import eval_cost  # noqa: E402
 from agentlab.evalresume import evaluated, select_targets  # noqa: E402
-from agentlab.spans import assert_text_only, strip_images  # noqa: E402
+from agentlab.spans import assert_text_only, missing_events, strip_images  # noqa: E402
 
 REGION = "ap-northeast-1"
 RUNTIME = "vlmlab_ci_inspector"
@@ -114,6 +114,18 @@ def main() -> None:
             sent_bytes = assert_text_only(stripped)  # 画像が残っていれば ValueError で止まる（評価は呼ばない）
             (out_dir / f"{sid}.spans.json").write_text(json.dumps(stripped, ensure_ascii=False, indent=1),
                                                        encoding="utf-8", newline="\n")
+            lacking = missing_events(stripped)
+            if lacking:  # CI-AC-S7：イベントの欠けたスパンがあると評価は失敗するので、呼ばずに記録だけ残す
+                row = {"image_id": r["image_id"], "label": r["label"], "pred": r.get("pred"), "session_id": sid,
+                       "evaluator": a.evaluator, "kind": kind, "n_spans": len(spans), "images_removed": n_removed,
+                       "raw_bytes": raw_bytes, "sent_bytes": sent_bytes, "value": None, "result_label": None,
+                       "explanation": None, "input_tokens": None, "output_tokens": None, "cost_usd": 0.0,
+                       "error": f"incomplete: {len(lacking)} spans lack log events (not evaluated): {lacking[:5]}",
+                       "skipped": True}
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                f.flush()
+                print("SKIP incomplete", r["image_id"], lacking[:5])
+                continue
             trace_ids = span_helpers.trace_ids(stripped)[:10]
             resp = dp.evaluate(evaluatorId=evaluator_id, evaluationInput={"sessionSpans": stripped},
                                evaluationTarget={"traceIds": trace_ids})
