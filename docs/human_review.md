@@ -45,6 +45,7 @@ Step Functions のタスクトークンで、人の確認が要る画像だけ�
 | CI-HR13 | post | 見逃し率 = 自動・人で OK に確定した不良品 / 不良品、誤検知率 = NG に確定した良品 / 良品（0件なら None）。Bedrock の費用はトークン数 × 単価（cost.call_cost）。状態遷移は経路ごとの状態の数で見積もる（実測ではない） |
 | CI-HR15 | post | 20枚の一覧は visa_test_200 から品目×正解ごとに5枚（random_state=42）。`data/splits/visa_review_20.csv` |
 | CI-HR16 | post | 実行名は `<tag>-<番号3桁>-<画像 ID の英数字以外を - にしたもの>`（80文字以内）。実行の入力に正解を入れない。見本は品目ごとに ref_rank 1 の1枚 |
+| CI-HR17 | post | S3 に上げる画像の Content-Type は拡張子から image/jpeg・image/png にする（2026-11-21 の試運転で binary/octet-stream だったため） |
 | CI-IR1 | post | 作るのは S3・DynamoDB・Lambda 2つ・関数 URL・Step Functions・IAM ロールとポリシー・ロググループだけ。カスタムリソース、VPC、EventBridge、SNS は作らない |
 | CI-IR2 | post | IAM のアクションに * を使わない。S3 は GetObject だけ |
 | CI-IR3 | post | Bedrock は InvokeModel だけ。jp の推論プロファイルと、その振り分け先（ap-northeast-1・ap-northeast-3）の基盤モデルに限り、基盤モデルは推論プロファイル経由の条件を付ける |

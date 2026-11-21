@@ -408,3 +408,13 @@ def test_make_review_split_and_plan():
     with pytest.raises(ValueError):
         execution_name("x" * 80, 1, "a")
     assert execution_name("t", 2, "pcb1/normal/0797") == "t-002-pcb1-normal-0797"
+
+
+def test_content_type():
+    """CI-HR17：S3 に上げる画像の Content-Type は拡張子から決める（試運転で binary/octet-stream だったため）。"""
+    from vlmlab.review.driver import content_type
+
+    assert content_type("images/pcb1/Data/Images/Normal/0011.JPG") == "image/jpeg"
+    assert content_type("x.png") == "image/png"
+    with pytest.raises(ValueError):
+        content_type("x.gif")

@@ -13,6 +13,7 @@ from typing import Any
 
 import pandas as pd
 
+from .judge_handler import image_format
 from .runlog import COLUMNS, build_rows, summarize
 
 SFN_TRANSITION_USD_APN1 = 0.000025  # AWS Price List API（AmazonStates, APN1-StateTransition, 2026-11-21 確認）
@@ -22,6 +23,11 @@ def make_review_split(test_200: pd.DataFrame, n_per_group: int = 5, seed: int = 
     """CI-HR15：基本のテスト200枚から、品目×正解ごとに n 枚（random_state=seed）。順番は image_id 順。"""
     parts = [g.sample(n=n_per_group, random_state=seed) for _, g in test_200.groupby(["category", "label"], sort=True)]
     return pd.concat(parts).sort_values("image_id").reset_index(drop=True)
+
+
+def content_type(key: str) -> str:
+    """CI-HR17：S3 に上げる画像の Content-Type（確認画面の <img> で画像として扱われるように）。"""
+    return "image/" + image_format(key)
 
 
 def execution_name(tag: str, i: int, image_id: str) -> str:
@@ -59,7 +65,7 @@ def start(plan: list[dict[str, Any]], visa_root: Path, bucket: str, state_machin
     started = []
     for p in plan:
         for rel, key in [(p["image_path"], p["input"]["key"]), *zip(p["ref_paths"], p["input"]["ref_keys"])]:
-            s3.upload_file(str(visa_root / rel), bucket, key)
+            s3.upload_file(str(visa_root / rel), bucket, key, ExtraArgs={"ContentType": content_type(key)})
         resp = sfn.start_execution(stateMachineArn=state_machine_arn, name=p["name"],
                                    input=json.dumps({**p["input"], "bucket": bucket}))
         started.append({"name": p["name"], "image_id": p["input"]["image_id"], "execution_arn": resp["executionArn"],
