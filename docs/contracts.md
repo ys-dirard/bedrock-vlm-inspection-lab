@@ -191,3 +191,15 @@
 | CI-AC-P4 | pre | image_b64 は厳密な Base64 で、空でないバイト列になる |
 | CI-AC-P5 | pre | ref_b64 は run_config.n_refs > 0 のときだけ必須で、n_refs が 0 のときに渡されたら止める |
 | CI-AC-P6 | post | ペイロードが条件を満たさないとき、入口は {"error": ...} を返し、モデルも Code Interpreter も呼ばない |
+
+### memcases.py（12/17：記憶の事例。2026-11-21 書き手が決定）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-AC-M1 | post | 不良品は VisA 1cls の test の不良品、良品は train の良品から選ぶ。visa_test_200・見本（visa_refs の全 rank）・12/13 の学習用の良品（visa_calib_normal）・評価の50枚（visa_platform_claude50）と1枚でも重なれば止める |
+| CI-AC-M2 | post | 100件版は品目（capsules・pcb1）×正解ごとに25件（random_state=42）。足りなければ止める |
+| CI-AC-M3 | post | 20件版は100件版の部分集合で、品目×正解ごとに5件（random_state=42） |
+| CI-AC-M4 | post | 記録の本文は「品目」「12/13 の細かい文（CI-E4）」「確定した判定（anomaly → NG、normal → OK）」の3つ。文が空なら止める |
+| CI-AC-M5 | post | 検索の文は「品目」と「12/13 の細かい文」だけで、正解・判定を含まない |
+
+- 特徴の文は 12/13 のコード（ac/12-13 の commit 8df4314）を 12/13 のワークツリーの .venv で動かして作る（`agentcore/scripts/memory_features.py`。HEAD と src の変更を確かめてから動かす）。区切りは 12/13 と同じ学習用の良品の地図だけで決める
