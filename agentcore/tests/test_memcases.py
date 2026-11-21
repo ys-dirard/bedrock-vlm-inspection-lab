@@ -71,3 +71,36 @@ def test_record_and_query_text():  # CI-AC-M4, M5
         record_text("pcb1", t, "NG")
     with pytest.raises(ValueError):
         query_text("pcb1", "  ")
+
+
+def records_frame():
+    import pandas as pd
+    rows = []
+    for cat in ("capsules", "pcb1"):
+        for label in ("anomaly", "normal"):
+            for i in range(25):
+                rows.append({"image_id": f"{cat}/{label}/{i:03d}", "category": cat, "label": label,
+                             "record_text": f"品目: {cat}\nX\n確定した判定: {'NG' if label == 'anomaly' else 'OK'}",
+                             "in_v20": i < 5})
+    return pd.DataFrame(rows)
+
+
+def test_memory_records_versions():  # CI-AC-M6
+    from agentlab.memcases import memory_records
+    df = records_frame()
+    v100, v20 = memory_records(df, "v100"), memory_records(df, "v20")
+    assert len(v100) == 100 and len(v20) == 20
+    assert v100[0]["id"] == "v100-capsules-anomaly-000" and v100[0]["metadata"]["judgement"] == "NG"
+    assert {r["metadata"]["image_id"] for r in v20} <= {r["metadata"]["image_id"] for r in v100}
+    with pytest.raises(ValueError):
+        memory_records(df.iloc[:99], "v100")
+    with pytest.raises(ValueError):
+        memory_records(df, "v50")
+
+
+def test_memory_block():  # CI-AC-M8
+    from agentlab.memcases import MEMORY_HEADER, memory_block
+    assert memory_block([]) is None
+    assert memory_block([{"content": {"text": "  "}}]) is None
+    b = memory_block([{"content": {"text": "A"}, "score": 0.9}, {"content": {"text": "B"}, "score": 0.5}])
+    assert b.startswith(MEMORY_HEADER) and "事例1:\nA" in b and "事例2:\nB" in b and "0.9" not in b

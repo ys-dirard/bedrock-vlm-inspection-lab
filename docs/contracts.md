@@ -203,3 +203,11 @@
 | CI-AC-M5 | post | 検索の文は「品目」と「12/13 の細かい文」だけで、正解・判定を含まない |
 
 - 特徴の文は 12/13 のコード（ac/12-13 の commit 8df4314）を 12/13 のワークツリーの .venv で動かして作る（`agentcore/scripts/memory_features.py`。HEAD と src の変更を確かめてから動かす）。区切りは 12/13 と同じ学習用の良品の地図だけで決める
+
+### memstore.py・memcases.py・judge.py（12/17：Memory に入れる・取り出す・判定に足す）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-AC-M6 | pre | BatchCreateMemoryRecords の要求：記録は1〜100件、ID は重ならない。recordExpirySpecification は recordExpiryDurationDays だけ（31以上）か、指定しない。v20 は in_v20 の20件、v100 は100件でなければ止める。ID は `<版>-<image_id の / を - に>`、メタデータは category・judgement・image_id |
+| CI-AC-M7 | pre | RetrieveMemoryRecords の要求：topK ≥ 1、検索の文は空でない。品目を渡したときだけ metadataFilters（category の EQUALS_TO）で絞る |
+| CI-AC-M8 | post | 取り出した事例は、見出し（画像は含まない、判定は画像を見て行う）と「事例N:」の並びの文にし、検査対象の画像と指示の間に文のブロックとして入れる。score は書かない。事例が無ければ何も足さず、メッセージは今までと同じ |

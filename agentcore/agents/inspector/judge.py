@@ -3,6 +3,7 @@
 - 画像は [良品の見本, 検査対象, 指示] の順で1通の user メッセージにする（11月の layout refs_first と同じ）
 - ツールあり（Nova・Claude）は preprocess を渡す。ツールなし（Qwen）は何も渡さない（PL-D3）
 - トークン数は全ターンの合計（CI-PL-R3）
+- 12/17：extra_text（記憶から取り出した事例の文）があれば、検査対象の画像と指示の間に文のブロックとして入れる（CI-AC-M8）
 """
 
 from __future__ import annotations
@@ -17,11 +18,14 @@ from agentlab.runcfg import PlatformRunConfig
 from preprocess import Preprocessor, Sandbox
 
 
-def build_message(cfg: PlatformRunConfig, target: EncodedImage, ref: EncodedImage | None) -> list[dict[str, Any]]:
+def build_message(cfg: PlatformRunConfig, target: EncodedImage, ref: EncodedImage | None,
+                  extra_text: str | None = None) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
     if ref is not None and cfg.n_refs > 0:
         blocks.append({"image": {"format": ref.format, "source": {"bytes": ref.data}}})
     blocks.append({"image": {"format": target.format, "source": {"bytes": target.data}}})
+    if extra_text:
+        blocks.append({"text": extra_text})
     blocks.append({"text": cfg.prompt})
     return blocks
 
@@ -66,7 +70,8 @@ def make_agent(cfg: PlatformRunConfig, tools: list[Any]):
 
 
 def run_judge(cfg: PlatformRunConfig, target_raw: bytes, ref_raw: bytes | None,
-              sandbox_factory: Callable[[], Sandbox], agent_factory=make_agent) -> AgentOutcome:
+              sandbox_factory: Callable[[], Sandbox], agent_factory=make_agent,
+              extra_text: str | None = None) -> AgentOutcome:
     from strands import tool
 
     target = encode_image(target_raw, cfg.image_long_edge)
@@ -90,7 +95,7 @@ def run_judge(cfg: PlatformRunConfig, target_raw: bytes, ref_raw: bytes | None,
     started = time.perf_counter()
     result, error = None, None
     try:
-        result = agent(build_message(cfg, target, ref))
+        result = agent(build_message(cfg, target, ref, extra_text))
     except Exception as e:  # noqa: BLE001  記録に残して、Step Functions へは正常に返す（CI-PL-R4）
         error = f"{type(e).__name__}: {e}"[:1000]
     finally:

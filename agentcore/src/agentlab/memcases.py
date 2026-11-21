@@ -84,3 +84,32 @@ def query_text(category: str, feature_text: str) -> str:
     if not feature_text.strip():
         raise ValueError("feature text is empty")
     return f"品目: {category}\n{feature_text.strip()}"
+
+
+NAMESPACES = {"v20": "/cases/v20/", "v100": "/cases/v100/"}
+TOP_K = 3
+MEMORY_HEADER = ("参考：過去に担当者が判定を確定した事例のうち、特徴の文が似ているものです（画像は含みません）。"
+                 "検査対象の判定は、検査対象の画像を見て行ってください。")
+
+
+def memory_records(cases: "pd.DataFrame", version: str) -> list[dict]:
+    """CI-AC-M6 の入力。memory_records.csv の行から、その版（v20・v100）に入れる記録を作る。"""
+    if version not in NAMESPACES:
+        raise ValueError(f"version must be one of {sorted(NAMESPACES)}: {version!r}")
+    rows = cases if version == "v100" else cases[cases["in_v20"].astype(bool)]
+    expected = 4 * (PER_GROUP_100 if version == "v100" else PER_GROUP_20)
+    if len(rows) != expected:
+        raise ValueError(f"{version} must have {expected} records: {len(rows)}")
+    return [{"id": f"{version}-{r.image_id.replace('/', '-')}", "text": r.record_text,
+             "metadata": {"category": r.category, "judgement": JUDGEMENT[r.label], "image_id": r.image_id}}
+            for r in rows.itertuples(index=False)]
+
+
+def memory_block(hits: list[dict]) -> str | None:
+    """CI-AC-M8。取り出した事例（RetrieveMemoryRecords の memoryRecordSummaries）を、指示に足す文にする。
+    事例が無ければ None（指示に何も足さない）。score は書かない。"""
+    texts = [h["content"]["text"].strip() for h in hits if h.get("content", {}).get("text", "").strip()]
+    if not texts:
+        return None
+    body = "\n\n".join(f"事例{i}:\n{t}" for i, t in enumerate(texts, 1))
+    return f"{MEMORY_HEADER}\n\n{body}"

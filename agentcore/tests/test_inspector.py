@@ -185,3 +185,19 @@ def test_parallel_tool_calls_open_one_sandbox_and_close_it():  # deviations.md �
         t.join()
     pre.close()
     assert len(made) == 1 and made[0].stopped and len(made[0].codes) == 2 and pre.calls == 2
+
+
+def test_extra_text_goes_between_images_and_instruction():  # CI-AC-M8
+    holder = {}
+
+    def factory(cfg_, tools):
+        holder["agent"] = FakeAgent(tools)
+        return holder["agent"]
+
+    judge.run_judge(cfg(tools_enabled=False), png(), png(color=(1, 2, 3)), lambda: FakeSandbox(),
+                    agent_factory=factory, extra_text="参考の事例")
+    seen = holder["agent"].seen
+    assert [next(iter(b)) for b in seen] == ["image", "image", "text", "text"]
+    assert seen[2]["text"] == "参考の事例" and seen[3]["text"] == "判定して"
+    out, agent = run(cfg())
+    assert [next(iter(b)) for b in agent.seen] == ["image", "image", "text"]  # 無ければ今までと同じ
