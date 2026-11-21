@@ -108,8 +108,8 @@ def test_levels_and_rank_text():
     assert score_level3(0.12, cal) == "学習用の良品と同じくらい"
     assert score_level3(0.195, cal) == "学習用の良品の上位10%に入る高さ"
     assert score_level3(0.21, cal) == "学習用の良品のどれよりも高い"
-    assert score_rank_text(0.2, cal) == "学習用の良品10枚の中で上位10%に入る高さ"   # 0.2 以上は1枚
-    assert score_rank_text(0.1, cal) == "学習用の良品10枚の中で上位100%に入る高さ"
+    assert score_rank_text(0.2, cal) == "学習用の良品10枚のうち、これ以上の異常度は10%"   # 0.2 以上は1枚
+    assert score_rank_text(0.1, cal) == "学習用の良品10枚のうち、これ以上の異常度は100%"
     assert "わずかに上回る" in score_rank_text(0.21, cal)
     assert "大きく上回る" in score_rank_text(0.31, cal)
 

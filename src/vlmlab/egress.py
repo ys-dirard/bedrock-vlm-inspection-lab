@@ -145,7 +145,10 @@ def score_level3(score: float, cal: Calibration) -> str:
 
 
 def score_rank_text(score: float, cal: Calibration) -> str:
-    """学習用の良品のうち、異常度が score 以上だった割合を「上位 x%」で言う（切り上げの整数）。"""
+    """学習用の良品のうち、異常度が score 以上だった割合 x%（切り上げの整数）を言う。
+
+    「上位 x%に入る高さ」は、x が大きいとき「良品の可能性 x%」と読み違えられた（v1 の試運転）ので、
+    「これ以上の異常度は x%」の形にした（2026-11-21、書き手が決定）。"""
     if score > cal.score_max:
         ratio = score / cal.score_max if cal.score_max > 0 else math.inf
         if ratio >= 1.5:
@@ -157,7 +160,7 @@ def score_rank_text(score: float, cal: Calibration) -> str:
         return f"学習用の良品{cal.n_images}枚のどれよりも高い（最も高い良品を{how}）"
     n_ge = sum(1 for s in cal.scores if s >= score)
     pct = math.ceil(100 * n_ge / cal.n_images)
-    return f"学習用の良品{cal.n_images}枚の中で上位{pct}%に入る高さ"
+    return f"学習用の良品{cal.n_images}枚のうち、これ以上の異常度は{pct}%"
 
 
 def size_text(frac: float) -> str:
