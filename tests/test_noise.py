@@ -120,3 +120,17 @@ def test_threshold_and_test_metrics():
     assert N.threshold_at_miss(np.array([0.3, 0.6, 0.7]), np.array([True] * 3), 0.34) == 0.6
     with pytest.raises(ValueError):
         N.eval_test_metrics(scores.drop("a"), test)
+
+
+@pytest.mark.parametrize("sizes", [[7, 7, 7, 7, 7], [5, 9, 3, 8, 6]])
+def test_sim_rows_torch_matches_numpy(sizes):
+    torch = pytest.importorskip("torch")
+    from vlmlab.noise_dino import sim_rows_torch
+    rng = np.random.default_rng(2)
+    bank = [_rand(rng, n) for n in sizes]
+    bank = [b / np.linalg.norm(b, axis=1, keepdims=True) for b in bank]
+    x = _rand(rng, 11)
+    x = x / np.linalg.norm(x, axis=1, keepdims=True)
+    bank_t = torch.from_numpy(np.concatenate(bank, axis=0))
+    got = sim_rows_torch(x, bank_t, sizes, chunk=2)  # 区切りをまたぐ場合も確かめる
+    assert np.allclose(got, sim_rows(x, bank), atol=1e-6)

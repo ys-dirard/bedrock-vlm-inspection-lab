@@ -104,8 +104,29 @@ def sim_rows(row_feats: np.ndarray, bank: list[np.ndarray]) -> np.ndarray:
     return out
 
 
+def sim_rows_torch(row_feats: np.ndarray, bank_t, sizes: list[int], chunk: int = 64) -> np.ndarray:
+    """sim_rows と同じ計算を torch で（GPU 用）。bank_t は見本の候補の特徴を縦に連結した (P, D) の tensor、sizes は各画像のパッチ数。"""
+    import torch
+
+    x = torch.from_numpy(np.ascontiguousarray(row_feats, dtype=np.float32)).to(bank_t.device)
+    out = torch.empty((x.shape[0], len(sizes)), dtype=torch.float32, device=bank_t.device)
+    bounds = np.cumsum([0] + list(sizes))
+    with torch.inference_mode():
+        for s in range(0, len(sizes), chunk):
+            e = min(s + chunk, len(sizes))
+            sim = x @ bank_t[bounds[s]:bounds[e]].T
+            sz = sizes[s:e]
+            if len(set(sz)) == 1:
+                out[:, s:e] = sim.view(x.shape[0], e - s, sz[0]).amax(dim=2)
+            else:
+                for j in range(s, e):
+                    out[:, j] = sim[:, bounds[j] - bounds[s]:bounds[j + 1] - bounds[s]].amax(dim=1)
+    return out.cpu().numpy()
+
+
 def execute(cfg: NoiseDinoConfig, config_path: Path, root: Path, visa_root: Path, runs_dir: Path,
-            anomalydino_root: Path, limit: int | None = None) -> Path:
+            anomalydino_root: Path, limit: int | None = None, categories: list[str] | None = None) -> Path:
+    """categories を渡すと、その品目だけを作る（1回の実行を短く区切るため。終わった品目は飛ばす）。"""
     run_name, noisy, test = plan(cfg, root, limit)
     out = runs_dir / run_name
     out.mkdir(parents=True, exist_ok=True)
@@ -118,38 +139,56 @@ def execute(cfg: NoiseDinoConfig, config_path: Path, root: Path, visa_root: Path
     ident_path.write_text(json.dumps(ident, ensure_ascii=False, indent=2), encoding="utf-8")
     (out / "config.yaml").write_text(Path(config_path).read_text(encoding="utf-8"), encoding="utf-8")
 
-    todo = [c for c in sorted(noisy["category"].unique()) if not (out / f"{c}.done").exists()]
+    todo = [c for c in sorted(noisy["category"].unique()) if not (out / f"{c}.done").exists()
+            and (categories is None or c in categories)]
     print(f"{run_name}: categories to do {todo}")
     if not todo:
         return out
     import torch
     ad = OfficialAnomalyDINO(cfg.ad_config(), anomalydino_root)
-    meta: dict[str, Any] = {"run_name": run_name, "started": datetime.now(JST).isoformat(timespec="seconds"),
-                            "torch": torch.__version__, "torch_threads": torch.get_num_threads(),
-                            "model_load_s": ad.load_time_s, "categories": {}}
+    gpu = cfg.device.startswith("cuda")
+    base_meta: dict[str, Any] = {"run_name": run_name, "torch": torch.__version__, "device": cfg.device,
+                                 "gpu_name": torch.cuda.get_device_name(0) if gpu else None,
+                                 "torch_threads": torch.get_num_threads(), "model_load_s": ad.load_time_s}
+    sync = torch.cuda.synchronize if gpu else (lambda: None)
     for cat in todo:
+        started = datetime.now(JST).isoformat(timespec="seconds")
         t0 = time.perf_counter()
         n_rows = noisy[noisy["category"] == cat]
         t_rows = test[test["category"] == cat]
         feats: dict[str, tuple[np.ndarray, np.ndarray]] = {}
         for _, r in pd.concat([n_rows, t_rows]).iterrows():
             feats[r["image_id"]] = _features(ad, visa_root / r["path"])
+        sync()
         t_feat = time.perf_counter() - t0
         bank_ids = n_rows["image_id"].tolist()
         bank = [feats[i][0] for i in bank_ids]  # 見本の候補は背景を除かない
+        if gpu:
+            bank_t = torch.from_numpy(np.concatenate(bank, axis=0)).to(cfg.device)
+            sizes = [b.shape[0] for b in bank]
+            rows_fn = lambda f: sim_rows_torch(f, bank_t, sizes)  # noqa: E731
+        else:
+            rows_fn = lambda f: sim_rows(f, bank)  # noqa: E731
         tables = {}
         for kind, rows in (("noisy", n_rows), ("test", t_rows)):
             ids = rows["image_id"].tolist()
-            sims = [sim_rows(feats[i][0][feats[i][1]], bank) for i in ids]
+            sims = [rows_fn(feats[i][0][feats[i][1]]) for i in ids]
             tables[kind] = SimTable(ids, bank_ids, sims, [int(feats[i][0].shape[0]) for i in ids])
+        sync()
         t_sim = time.perf_counter() - t0 - t_feat
+        if gpu:
+            del bank_t
+            torch.cuda.empty_cache()
         save_sim_table(tables["noisy"], out / f"{cat}.noisy.npz")
         save_sim_table(tables["test"], out / f"{cat}.test.npz")
         (out / f"{cat}.done").write_text("done", encoding="utf-8")  # 品目が終わった印（再開用）
-        meta["categories"][cat] = {"n_noisy": len(n_rows), "n_test": len(t_rows), "features_s": t_feat,
-                                   "similarity_s": t_sim, "n_bank_patches": int(sum(b.shape[0] for b in bank))}
+        meta = {**base_meta, "category": cat, "started": started,
+                "finished": datetime.now(JST).isoformat(timespec="seconds"),
+                "n_noisy": len(n_rows), "n_test": len(t_rows), "features_s": t_feat,
+                "features_s_per_image": t_feat / (len(n_rows) + len(t_rows)), "similarity_s": t_sim,
+                "n_bank_patches": int(sum(b.shape[0] for b in bank))}
+        with (out / "meta.jsonl").open("a", encoding="utf-8") as f:  # 品目ごとに1行（途中で止まっても残る）
+            f.write(json.dumps(meta, ensure_ascii=False) + "\n")
         print(f"  {cat}: features {t_feat:.0f}s, similarity {t_sim:.0f}s")
-    meta["finished"] = datetime.now(JST).isoformat(timespec="seconds")
-    with (out / "meta.jsonl").open("a", encoding="utf-8") as f:
-        f.write(json.dumps(meta, ensure_ascii=False) + "\n")
+        del feats, bank, tables
     return out

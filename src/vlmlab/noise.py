@@ -154,7 +154,8 @@ def save_sim_table(t: SimTable, path: Path) -> None:
 def load_sim_table(path: Path) -> SimTable:
     z = np.load(path, allow_pickle=False)
     off = z["offsets"]
-    sims = [z["sims"][off[i]:off[i + 1]] for i in range(len(off) - 1)]
+    all_sims = z["sims"]  # 一度だけ読む（npz はキーを引くたびに配列全体を読み直す）
+    sims = [all_sims[off[i]:off[i + 1]] for i in range(len(off) - 1)]
     return SimTable([str(x) for x in z["rows"]], [str(x) for x in z["bank"]], sims, [int(x) for x in z["n_patches"]])
 
 

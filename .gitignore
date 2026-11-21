@@ -23,3 +23,6 @@ data/mmad/
 # AnomalyDINO（12/10 の記事）：公式実装の clone と、DINOv2 の重みの置き場（torch.hub）
 third_party/
 data/torch_home/
+
+# GPU 版の環境（12/22 の記事。README の「GPU 版の環境」の手順で作る。pyproject.toml・uv.lock は変えない）
+.venv-gpu/

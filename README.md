@@ -153,12 +153,35 @@ VisA の train の良品に、評価に使っていない不良品を 5% 混ぜ�
 ```bash
 uv run vlmlab noise splits                                              # data/splits/noise_train_420.csv（中立の ID、正解なし）と noise_truth_420.csv（正解）
 uv run vlmlab run configs/nz1_nova2lite.yaml --limit 8                  # Nova の試運転（本番は --limit なしで420枚）
-uv run --extra anomalydino vlmlab noise dino configs/nz1_anomalydino.yaml --limit 8   # AnomalyDINO の類似度の表の試運転
-uv run --extra anomalydino vlmlab noise report --dino runs/nz1_anomalydino --nova runs/nz1_nova2lite --out results
+.venv-gpu/Scripts/vlmlab.exe noise dino configs/nz1_anomalydino.yaml --categories capsules   # 類似度の表（GPU。品目ごとに区切って流す）
+.venv-gpu/Scripts/vlmlab.exe noise dino configs/nz1_anomalydino.yaml --categories pcb1
+uv run vlmlab noise report --dino runs/nz1_anomalydino --nova runs/nz1_nova2lite --out results
 ```
 
 - 判定に使う一覧には正解を書かず、正解は別のファイルに分けています。モデルに送るのは画像だけです
 - 定義は [docs/contracts.md](docs/contracts.md) の CI-N1〜N7
+- `--categories` で品目を区切れます。終わった品目（`runs/<name>/<品目>.done`）は飛ばすので、止まっても品目ごとに再開できます
+- CPU で作るときは `uv run --extra anomalydino vlmlab noise dino configs/nz1_anomalydino_cpu.yaml`（比較用。2026-11-21 は pcb1 の途中でメモリ不足で止まった）
+
+### GPU 版の環境（.venv-gpu）
+
+類似度の表は GPU（CUDA）で作りました。GPU 版の PyTorch は `pyproject.toml`・`uv.lock` に入れず、別の仮想環境 `.venv-gpu` に入れます（`.gitignore` 済み）。`uv run` は `.venv`（CPU 版）を使うので、GPU 版は `.venv-gpu/Scripts/vlmlab.exe` を直接呼びます。
+
+- PyTorch 2.15 の Stable CUDA は 13.2（https://github.com/pytorch/pytorch/blob/main/RELEASE.md の Release Compatibility Matrix、2026-11-22 確認）。PyTorch の公式の index（https://download.pytorch.org/whl/cu132 ）にある Windows・Python 3.12 の wheel は torch 2.15.0+cu132 と torchvision 0.29.1+cu132 まで（0.29.2+cu132 は無い。CPU 版は 0.29.2）
+- NVIDIA のドライバは CUDA 13.2 以上に対応している必要がある（2026-11-22 に使った PC は ドライバ 617.42、`nvidia-smi` の CUDA UMD Version 13.4、GeForce RTX 3080 Ti 12 GB）
+
+```bash
+uv export --frozen --extra anomalydino --no-hashes --no-emit-project --no-dev --format requirements-txt -o req.txt
+grep -v -E '^(torch|torchvision)==' req.txt > req_no_torch.txt            # torch・torchvision 以外は uv.lock と同じ版
+uv venv .venv-gpu --python 3.12
+uv pip install --python .venv-gpu/Scripts/python.exe -r req_no_torch.txt
+uv pip install --python .venv-gpu/Scripts/python.exe --no-deps --index-url https://download.pytorch.org/whl/cu132 \
+  "torch==2.15.0+cu132" "torchvision==0.29.1+cu132"
+uv pip install --python .venv-gpu/Scripts/python.exe --no-deps -e .
+.venv-gpu/Scripts/python.exe -c "import torch; print(torch.__version__, torch.cuda.is_available())"   # 2.15.0+cu132 True
+```
+
+- CPU と GPU の差（2026-11-22、capsules の210枚と100枚）：前景のパッチは全画像で一致、類似度の差は最大 1.7e-5、異常度の差は最大 7.0e-7、順位は同じで、上位 5・10・20% に入る画像も同じ。1枚あたりの特徴づくりは CPU 0.63 秒・GPU 0.13 秒
 
 ## 記録の形（runs/<name>/calls.jsonl、1行1呼び出し）
 

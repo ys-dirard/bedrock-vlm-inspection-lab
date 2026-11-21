@@ -104,6 +104,7 @@ def main(argv: list[str] | None = None) -> None:
     nzd.add_argument("--runs-dir", default="runs")
     nzd.add_argument("--anomalydino-root", default="third_party/AnomalyDINO")
     nzd.add_argument("--torch-home", default="data/torch_home")
+    nzd.add_argument("--categories", nargs="+", default=None, help="この品目だけを作る（1回の実行を短く区切る）")
     nzr = nzsub.add_parser("report")
     nzr.add_argument("--dino", required=True)
     nzr.add_argument("--nova", default=None)
@@ -264,7 +265,7 @@ def _noise(a: argparse.Namespace) -> None:
                               "test": test.groupby(["category", "label"]).size().to_dict().__repr__()},
                              ensure_ascii=False, indent=2))
             return
-        print(f"out: {execute(cfg, Path(a.config), ROOT, Path(a.visa_root), ROOT / a.runs_dir, Path(a.anomalydino_root), a.limit)}")
+        print(f"out: {execute(cfg, Path(a.config), ROOT, Path(a.visa_root), ROOT / a.runs_dir, Path(a.anomalydino_root), a.limit, a.categories)}")
     elif a.ncmd == "report":
         from .noise import build_report
         nova = ROOT / a.nova if a.nova else None
