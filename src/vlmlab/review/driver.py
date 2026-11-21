@@ -100,7 +100,7 @@ def write_run_log(items: list[dict[str, Any]], split: pd.DataFrame, price: Any, 
         w.writerows(rows)
     summary = summarize(rows, SFN_TRANSITION_USD_APN1)
     out_csv.with_name(out_csv.stem + "_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     return summary
 
 

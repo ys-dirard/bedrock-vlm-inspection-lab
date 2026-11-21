@@ -209,7 +209,7 @@ def _review(a: argparse.Namespace) -> None:
         started = driver.start(plan, Path(a.visa_root), a.bucket, a.state_machine, a.region)
         out = ROOT / a.runs_dir / f"review_{a.tag}" / "started.json"
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(started, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        out.write_text(json.dumps(started, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(f"started {len(started)} executions -> {out}")
     elif a.rcmd == "export":
         from .cost import PricingTable
