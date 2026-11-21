@@ -1,0 +1,9 @@
+# 12/20 の記事：クエリ（不良品 60 枚）。画像だけの索引を探すので IMAGE_RETRIEVAL
+name: ac20_query
+manifest: data/splits/ac20_query.csv
+model_id: amazon.nova-2-multimodal-embeddings-v1:0
+region: us-east-1
+purpose: IMAGE_RETRIEVAL     # 「STANDARD_IMAGE の画像だけの索引を探すとき」（embeddings-schema.html）
+dimension: 1024
+budget_usd: 0.05             # 60 枚 × 0.00006 = 0.0036 USD の見込み
+image_long_edge: null

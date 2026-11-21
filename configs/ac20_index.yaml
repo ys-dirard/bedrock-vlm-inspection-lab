@@ -1,0 +1,9 @@
+# 12/20 の記事：索引（不良品 300 枚＋良品 300 枚）。良品は「良品も混ぜた索引」の比較に使う
+name: ac20_index
+manifest: data/splits/ac20_index.csv
+model_id: amazon.nova-2-multimodal-embeddings-v1:0
+region: us-east-1            # モデルカードの表は us-east-1（と us-gov-west-1）のみ。Geo / Global は非対応（2026-11-21 確認）
+purpose: GENERIC_INDEX       # 索引に入れるものは、種類によらず GENERIC_INDEX（embeddings-schema.html）
+dimension: 1024
+budget_usd: 0.10             # 600 枚 × 0.00006 = 0.036 USD の見込み
+image_long_edge: null        # 原寸（STANDARD_IMAGE は1枚あたりの課金で、解像度によらない）

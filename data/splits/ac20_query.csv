@@ -1,0 +1,61 @@
+item_id,modality,detail,path,category,label,defect_type,mask_path,role
+candle/anomaly/000,image,STANDARD_IMAGE,candle/Data/Images/Anomaly/000.JPG,candle,anomaly,chunk of wax missing,candle/Data/Masks/Anomaly/000.png,query
+candle/anomaly/029,image,STANDARD_IMAGE,candle/Data/Images/Anomaly/029.JPG,candle,anomaly,damaged corner of packaging,candle/Data/Masks/Anomaly/029.png,query
+candle/anomaly/037,image,STANDARD_IMAGE,candle/Data/Images/Anomaly/037.JPG,candle,anomaly,weird candle wick,candle/Data/Masks/Anomaly/037.png,query
+candle/anomaly/045,image,STANDARD_IMAGE,candle/Data/Images/Anomaly/045.JPG,candle,anomaly,different colour spot,candle/Data/Masks/Anomaly/045.png,query
+candle/anomaly/077,image,STANDARD_IMAGE,candle/Data/Images/Anomaly/077.JPG,candle,anomaly,foreign particals on candle,candle/Data/Masks/Anomaly/077.png,query
+candle/anomaly/088,image,STANDARD_IMAGE,candle/Data/Images/Anomaly/088.JPG,candle,anomaly,wax melded out of the candle,candle/Data/Masks/Anomaly/088.png,query
+cashew/anomaly/001,image,STANDARD_IMAGE,cashew/Data/Images/Anomaly/001.JPG,cashew,anomaly,burnt,cashew/Data/Masks/Anomaly/001.png,query
+cashew/anomaly/013,image,STANDARD_IMAGE,cashew/Data/Images/Anomaly/013.JPG,cashew,anomaly,corner or edge breakage,cashew/Data/Masks/Anomaly/013.png,query
+cashew/anomaly/025,image,STANDARD_IMAGE,cashew/Data/Images/Anomaly/025.JPG,cashew,anomaly,different colour spot,cashew/Data/Masks/Anomaly/025.png,query
+cashew/anomaly/045,image,STANDARD_IMAGE,cashew/Data/Images/Anomaly/045.JPG,cashew,anomaly,same colour spot,cashew/Data/Masks/Anomaly/045.png,query
+cashew/anomaly/064,image,STANDARD_IMAGE,cashew/Data/Images/Anomaly/064.JPG,cashew,anomaly,small holes,cashew/Data/Masks/Anomaly/064.png,query
+cashew/anomaly/079,image,STANDARD_IMAGE,cashew/Data/Images/Anomaly/079.JPG,cashew,anomaly,small scratches,cashew/Data/Masks/Anomaly/079.png,query
+chewinggum/anomaly/005,image,STANDARD_IMAGE,chewinggum/Data/Images/Anomaly/005.JPG,chewinggum,anomaly,corner missing,chewinggum/Data/Masks/Anomaly/005.png,query
+chewinggum/anomaly/024,image,STANDARD_IMAGE,chewinggum/Data/Images/Anomaly/024.JPG,chewinggum,anomaly,chunk of gum missing,chewinggum/Data/Masks/Anomaly/024.png,query
+chewinggum/anomaly/034,image,STANDARD_IMAGE,chewinggum/Data/Images/Anomaly/034.JPG,chewinggum,anomaly,corner missing,chewinggum/Data/Masks/Anomaly/034.png,query
+chewinggum/anomaly/067,image,STANDARD_IMAGE,chewinggum/Data/Images/Anomaly/067.JPG,chewinggum,anomaly,scratches,chewinggum/Data/Masks/Anomaly/067.png,query
+chewinggum/anomaly/084,image,STANDARD_IMAGE,chewinggum/Data/Images/Anomaly/084.JPG,chewinggum,anomaly,similar colour spot,chewinggum/Data/Masks/Anomaly/084.png,query
+chewinggum/anomaly/098,image,STANDARD_IMAGE,chewinggum/Data/Images/Anomaly/098.JPG,chewinggum,anomaly,similar colour spot,chewinggum/Data/Masks/Anomaly/098.png,query
+fryum/anomaly/000,image,STANDARD_IMAGE,fryum/Data/Images/Anomaly/000.JPG,fryum,anomaly,burnt,fryum/Data/Masks/Anomaly/000.png,query
+fryum/anomaly/012,image,STANDARD_IMAGE,fryum/Data/Images/Anomaly/012.JPG,fryum,anomaly,corner or edge breakage,fryum/Data/Masks/Anomaly/012.png,query
+fryum/anomaly/029,image,STANDARD_IMAGE,fryum/Data/Images/Anomaly/029.JPG,fryum,anomaly,different colour spot,fryum/Data/Masks/Anomaly/029.png,query
+fryum/anomaly/057,image,STANDARD_IMAGE,fryum/Data/Images/Anomaly/057.JPG,fryum,anomaly,fryum stuck together,fryum/Data/Masks/Anomaly/057.png,query
+fryum/anomaly/074,image,STANDARD_IMAGE,fryum/Data/Images/Anomaly/074.JPG,fryum,anomaly,middle breakage,fryum/Data/Masks/Anomaly/074.png,query
+fryum/anomaly/088,image,STANDARD_IMAGE,fryum/Data/Images/Anomaly/088.JPG,fryum,anomaly,similar colour spot,fryum/Data/Masks/Anomaly/088.png,query
+macaroni1/anomaly/000,image,STANDARD_IMAGE,macaroni1/Data/Images/Anomaly/000.JPG,macaroni1,anomaly,chip around edge and corner,macaroni1/Data/Masks/Anomaly/000.png,query
+macaroni1/anomaly/036,image,STANDARD_IMAGE,macaroni1/Data/Images/Anomaly/036.JPG,macaroni1,anomaly,different colour spot,macaroni1/Data/Masks/Anomaly/036.png,query
+macaroni1/anomaly/049,image,STANDARD_IMAGE,macaroni1/Data/Images/Anomaly/049.JPG,macaroni1,anomaly,similar colour spot,macaroni1/Data/Masks/Anomaly/049.png,query
+macaroni1/anomaly/066,image,STANDARD_IMAGE,macaroni1/Data/Images/Anomaly/066.JPG,macaroni1,anomaly,similar colour spot,macaroni1/Data/Masks/Anomaly/066.png,query
+macaroni1/anomaly/081,image,STANDARD_IMAGE,macaroni1/Data/Images/Anomaly/081.JPG,macaroni1,anomaly,small cracks,macaroni1/Data/Masks/Anomaly/081.png,query
+macaroni1/anomaly/090,image,STANDARD_IMAGE,macaroni1/Data/Images/Anomaly/090.JPG,macaroni1,anomaly,small scratches,macaroni1/Data/Masks/Anomaly/090.png,query
+macaroni2/anomaly/039,image,STANDARD_IMAGE,macaroni2/Data/Images/Anomaly/039.JPG,macaroni2,anomaly,different color spot,macaroni2/Data/Masks/Anomaly/039.png,query
+macaroni2/anomaly/042,image,STANDARD_IMAGE,macaroni2/Data/Images/Anomaly/042.JPG,macaroni2,anomaly,color spot similar to the object,macaroni2/Data/Masks/Anomaly/042.png,query
+macaroni2/anomaly/043,image,STANDARD_IMAGE,macaroni2/Data/Images/Anomaly/043.JPG,macaroni2,anomaly,color spot similar to the object,macaroni2/Data/Masks/Anomaly/043.png,query
+macaroni2/anomaly/059,image,STANDARD_IMAGE,macaroni2/Data/Images/Anomaly/059.JPG,macaroni2,anomaly,small chip around edge,macaroni2/Data/Masks/Anomaly/059.png,query
+macaroni2/anomaly/069,image,STANDARD_IMAGE,macaroni2/Data/Images/Anomaly/069.JPG,macaroni2,anomaly,small chip around edge,macaroni2/Data/Masks/Anomaly/069.png,query
+macaroni2/anomaly/099,image,STANDARD_IMAGE,macaroni2/Data/Images/Anomaly/099.JPG,macaroni2,anomaly,small scratches,macaroni2/Data/Masks/Anomaly/099.png,query
+pcb1/anomaly/000,image,STANDARD_IMAGE,pcb1/Data/Images/Anomaly/000.JPG,pcb1,anomaly,bent,pcb1/Data/Masks/Anomaly/000.png,query
+pcb1/anomaly/011,image,STANDARD_IMAGE,pcb1/Data/Images/Anomaly/011.JPG,pcb1,anomaly,bent,pcb1/Data/Masks/Anomaly/011.png,query
+pcb1/anomaly/024,image,STANDARD_IMAGE,pcb1/Data/Images/Anomaly/024.JPG,pcb1,anomaly,melt,pcb1/Data/Masks/Anomaly/024.png,query
+pcb1/anomaly/043,image,STANDARD_IMAGE,pcb1/Data/Images/Anomaly/043.JPG,pcb1,anomaly,missing,pcb1/Data/Masks/Anomaly/043.png,query
+pcb1/anomaly/060,image,STANDARD_IMAGE,pcb1/Data/Images/Anomaly/060.JPG,pcb1,anomaly,melt,pcb1/Data/Masks/Anomaly/060.png,query
+pcb1/anomaly/096,image,STANDARD_IMAGE,pcb1/Data/Images/Anomaly/096.JPG,pcb1,anomaly,scratch,pcb1/Data/Masks/Anomaly/096.png,query
+pcb2/anomaly/000,image,STANDARD_IMAGE,pcb2/Data/Images/Anomaly/000.JPG,pcb2,anomaly,bent,pcb2/Data/Masks/Anomaly/000.png,query
+pcb2/anomaly/025,image,STANDARD_IMAGE,pcb2/Data/Images/Anomaly/025.JPG,pcb2,anomaly,melt,pcb2/Data/Masks/Anomaly/025.png,query
+pcb2/anomaly/046,image,STANDARD_IMAGE,pcb2/Data/Images/Anomaly/046.JPG,pcb2,anomaly,missing,pcb2/Data/Masks/Anomaly/046.png,query
+pcb2/anomaly/047,image,STANDARD_IMAGE,pcb2/Data/Images/Anomaly/047.JPG,pcb2,anomaly,missing,pcb2/Data/Masks/Anomaly/047.png,query
+pcb2/anomaly/063,image,STANDARD_IMAGE,pcb2/Data/Images/Anomaly/063.JPG,pcb2,anomaly,melt,pcb2/Data/Masks/Anomaly/063.png,query
+pcb2/anomaly/097,image,STANDARD_IMAGE,pcb2/Data/Images/Anomaly/097.JPG,pcb2,anomaly,scratch,pcb2/Data/Masks/Anomaly/097.png,query
+pcb3/anomaly/000,image,STANDARD_IMAGE,pcb3/Data/Images/Anomaly/000.JPG,pcb3,anomaly,bent,pcb3/Data/Masks/Anomaly/000.png,query
+pcb3/anomaly/011,image,STANDARD_IMAGE,pcb3/Data/Images/Anomaly/011.JPG,pcb3,anomaly,bent,pcb3/Data/Masks/Anomaly/011.png,query
+pcb3/anomaly/024,image,STANDARD_IMAGE,pcb3/Data/Images/Anomaly/024.JPG,pcb3,anomaly,melt,pcb3/Data/Masks/Anomaly/024.png,query
+pcb3/anomaly/042,image,STANDARD_IMAGE,pcb3/Data/Images/Anomaly/042.JPG,pcb3,anomaly,missing,pcb3/Data/Masks/Anomaly/042.png,query
+pcb3/anomaly/061,image,STANDARD_IMAGE,pcb3/Data/Images/Anomaly/061.JPG,pcb3,anomaly,melt,pcb3/Data/Masks/Anomaly/061.png,query
+pcb3/anomaly/090,image,STANDARD_IMAGE,pcb3/Data/Images/Anomaly/090.JPG,pcb3,anomaly,scratch,pcb3/Data/Masks/Anomaly/090.png,query
+pipe_fryum/anomaly/000,image,STANDARD_IMAGE,pipe_fryum/Data/Images/Anomaly/000.JPG,pipe_fryum,anomaly,burnt,pipe_fryum/Data/Masks/Anomaly/000.png,query
+pipe_fryum/anomaly/026,image,STANDARD_IMAGE,pipe_fryum/Data/Images/Anomaly/026.JPG,pipe_fryum,anomaly,corner and edge breakage,pipe_fryum/Data/Masks/Anomaly/026.png,query
+pipe_fryum/anomaly/033,image,STANDARD_IMAGE,pipe_fryum/Data/Images/Anomaly/033.JPG,pipe_fryum,anomaly,different colour spot,pipe_fryum/Data/Masks/Anomaly/033.png,query
+pipe_fryum/anomaly/063,image,STANDARD_IMAGE,pipe_fryum/Data/Images/Anomaly/063.JPG,pipe_fryum,anomaly,similar colour spot,pipe_fryum/Data/Masks/Anomaly/063.png,query
+pipe_fryum/anomaly/088,image,STANDARD_IMAGE,pipe_fryum/Data/Images/Anomaly/088.JPG,pipe_fryum,anomaly,small scratches,pipe_fryum/Data/Masks/Anomaly/088.png,query
+pipe_fryum/anomaly/097,image,STANDARD_IMAGE,pipe_fryum/Data/Images/Anomaly/097.JPG,pipe_fryum,anomaly,stuck together,pipe_fryum/Data/Masks/Anomaly/097.png,query
