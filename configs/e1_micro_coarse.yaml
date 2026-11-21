@@ -5,7 +5,7 @@ split: data/splits/visa_test_200.csv
 model_id: apac.amazon.nova-micro-v1:0   # 東京から呼べるのは APAC のプロファイルだけ（jp. は無い。2026-11-21 確認）
 region: ap-northeast-1
 service_tier: standard
-prompt: prompts/egress_v1_text.txt
+prompt: prompts/egress_v2_text.txt   # v1 は試運転で JSON のあとに説明が続き、10件中9件が解析失敗。v2 で「説明や理由は書かない」を足した（2026-11-21、書き手が決定）
 prompt_vars:
   capsules: {item: "capsules（カプセル）"}
   pcb1: {item: "pcb1（プリント基板）"}
@@ -13,7 +13,7 @@ text_only: true
 features: runs/egress_features/features.csv
 features_column: text_coarse
 n_refs: 0
-inference: {temperature: 0, maxTokens: 100}
+inference: {temperature: 0, maxTokens: 300}   # v1 の 100 では説明の途中で打ち切られた
 repeats: 1
 budget_usd: 0.05
 parse:
