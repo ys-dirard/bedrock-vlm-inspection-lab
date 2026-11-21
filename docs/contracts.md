@@ -157,3 +157,66 @@
 ### summary.py との突き合わせ（2026-11-05、利用者の許可を得て実行）
 
 - mmad_1050.csv の1,050問に、乱数（random.Random(0)、6割は正解・4割は選択肢から無作為）で答えを作り、本物の `caculate_accuracy_mmad`（commit `49db95b`）と `accuracy_table(mode="script")` に同じ答えを入れた。4データセット×7課題と平均の、すべてのセルの差の最大は 1.4e-14（浮動小数点の誤差）。読めない答えを含まない入力での確認なので、summary.py の削除の不具合（deviations.md の 17）は対象外
+
+## invoice（12/23 の記事：日本語の請求書の読み取り）
+
+目的の整理は記事フォルダ（advent-calendar/12-23_ja-invoice-extraction）の `framing.md`。請求書・会社名・住所・登録番号はすべて架空。
+
+### 未決（書き手が決める。framing.md の Q1〜Q3）
+
+| ID | 未決のこと | いまの実装 |
+| --- | --- | --- |
+| IV-Q1 | 登録番号が実在と重ならないことの確かめ方 | 照合の仕組みは無い。発行元の一覧を `data/splits/invoice_issuers.csv` に出す |
+| IV-Q2 | ```json の囲みを解析失敗とするか | `report` の既定は囲みを外して読む。`--no-fence` で失敗として数える。どちらでも fenced_rate を出す |
+| IV-Q3 | 文字列の一致の決め方 | 空白（半角・全角・改行）だけ除いて完全一致（CI-IS3） |
+
+### truth.py・render.py・generate.py（請求書を作る）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-IT1 | pre/post | 検査用数字 = 9 −（右端を1桁目として、奇数桁の和 + 偶数桁の和×2）mod 9（国税庁の計算方法。例 700110005901 → 8）。12桁の ASCII 数字でなければ ValueError。登録番号の検査は T＋13桁かつ先頭の数字が検査用数字と一致 |
+| CI-IT2 | post | 発行元は30社。登録番号は発行元ごとに1つで重複しない |
+| CI-IT3 | post | 明細は3〜8行、そのうち軽減税率は0〜3行。金額 = 数量×単価 |
+| CI-IT4 | post | 税は税率ごとに1回、切り捨て（10%・8%）。合計 = 小計10 + 税10 + 小計8 + 税8 |
+| CI-IT5 | post | 同じシード（42）で同じ正解。半数（偶数番号）の発行日は和暦（令和）で描き、正解は ISO 形式 |
+| CI-IR1 | post | 和暦は令和のみ（令和元年 = 2019年）。2018年以前は ValueError |
+| CI-IR2 | post | 正解の値をそのまま描く。軽減税率の明細の品名の後ろに「※」、表の下に「※は軽減税率（8%）対象」、最下部に架空である旨 |
+| CI-IR3 | post | 劣化：±2度の回転（角度は seed+1 の乱数）→ ぼかし半径0.8 → 横900px に縮めて戻す → JPEG 品質40 |
+| CI-IR4 | post | 上下の分割は、高さの中央から上下に重なり100px（上 = 0〜中央+50、下 = 中央−50〜末尾） |
+| CI-IG1 | post | 一覧 `invoice_120.csv` は、きれい60 → 劣化60 の順。画像の SHA-256 とフォントの SHA-256 を `data/invoice/manifest.json` に残す |
+
+### schema.py（スキーマと指示）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-IP1 | post | すべての object に additionalProperties: false。全項目 required（省略できる項目 0）。null を許すのは registration_number だけ。minimum・minLength などは使わない（Bedrock の構造化出力の制約） |
+| CI-IP2 | post | 指示の文は全条件で同じ。構造化出力なしの条件だけ、末尾にスキーマ（JSON）を付ける。N-T は上下に分けた旨を足す |
+| CI-IP3 | post | outputConfig.textFormat = {type: json_schema, structure.jsonSchema: {schema: スキーマの JSON 文字列, name, description}} |
+| CI-B3 | post | ModelRequest.output_config を渡したときだけ Converse に outputConfig を送る |
+
+### score.py（読み取りと採点）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-IS1 | post | strict = 本文（前後の空白を除く）全体が JSON のオブジェクト。fenced = 本文全体が ```（json）の囲み1つで中身がオブジェクト。それ以外は失敗。文章の中から {…} を探さない |
+| CI-IS2 | post | スキーマに合わない点（足りない・余分なキー、型、日付の形、登録番号の形、明細のキーと型）を列挙する。採点は合わなくても読めた値で行う |
+| CI-IS3 | post | 文字列は空白だけ除いて完全一致（略称・全角半角の違いは不正解）。金額は int（bool を除く）で完全一致。"12,345" や 12345.0 は不正解 |
+| CI-IS4 | post | 明細の一致：正解の行のうち、全列（品名は空白を除く）が一致する行が応答にある数。並びは問わず、応答の1行は1回だけ使う |
+| CI-IS5 | post | 読めなかった応答は10項目すべて不正解、明細の一致 0 |
+| CI-IS6 | post | 整合チェックは読み取った値だけを使う（正解を見ない）：登録番号の検査用数字、税 = 小計×税率（切り捨て）、合計 = 小計＋税。金額が int でなければ不整合 |
+
+### run.py・report.py（実行と集計）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-IR5 | post | 試運転（--limit N）は一覧から等間隔に N 件。N=2 なら inv0001 のきれい・劣化。出力は runs/invoice/<name>__trial<N>/ |
+| CI-IR6 | post | 画像は1件1枚（PNG / JPEG のまま）。N-T は上下2枚を PNG にして、上 → 下 → 指示の順 |
+| CI-IR7 | pre | 再開のとき、呼び出しの中身を決める設定（条件、モデル ID、構造化出力、分割、回、指示の版と SHA-256、一覧の SHA-256、temperature、maxTokens、topP）が前の記録と違えば止める |
+| CI-IR8 | post | 成功した doc_id は飛ばし、API エラーの doc は呼び直す。予算は CI-C4 で見張る。記録には呼んだ順（seq）を残す |
+| CI-IM1 | post | 集計では doc_id ごとに最後の成功、無ければ最後の失敗。API エラーは指標の分母から外し、件数を出す |
+| CI-IM2 | post | 1件1行の採点表（scored_calls.csv）。囲みの扱いは IV-Q2 |
+| CI-IM3 | post | 10項目の正解率、全項目正解の割合、明細の一致率（一致した行 / 正解の行）、解析失敗率、スキーマ不一致率 |
+| CI-IM4 | post | 整合チェックの検出率 = 引っかかった誤り / 誤り（全項目のどれかが誤り）、誤報率 = 引っかかった正解 / 正解。チェックで見える5項目（登録番号・金額）に限った値も出す。分母 0 は None |
+| CI-IM5 | post | トークンの平均、レイテンシの p50・p95（線形補間）、最初の呼び出しのレイテンシ（構造化出力の文法の準備）、費用の合計と1,000件あたり（費用が None の行があれば None） |
+| CI-IM6 | post | 一致率 = 両方の回で読めた doc のうち、10項目の値（文字列は空白を除く）がすべて同じ割合 |
+| CI-IM7 | post | 条件×画像の種類（all・clean・degraded）の表を summary.csv・summary.md に出す |

@@ -19,3 +19,7 @@ __pycache__/
 
 # MMAD（問題の JSON と画像。data/splits/mmad_1050.csv だけコミットする）
 data/mmad/
+
+# 請求書の画像（data/splits/invoice_*.csv・jsonl だけコミットする。画像は vlmlab invoice generate で作り直せる）
+data/invoice/
+data/fonts/

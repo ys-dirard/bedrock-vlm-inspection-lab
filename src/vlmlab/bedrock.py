@@ -45,6 +45,7 @@ class ModelRequest:
     ref_note: str | None = None  # target_first のとき、見本の前に置く文
     service_tier: str = "standard"
     additional_fields: dict[str, Any] | None = None
+    output_config: dict[str, Any] | None = None  # Converse の outputConfig（構造化出力。CI-B3）
 
 
 @dataclass
@@ -105,6 +106,8 @@ def build_converse_kwargs(req: ModelRequest) -> dict[str, Any]:
         kwargs["serviceTier"] = {"type": SERVICE_TIERS[req.service_tier]}
     if req.additional_fields:
         kwargs["additionalModelRequestFields"] = req.additional_fields
+    if req.output_config is not None:
+        kwargs["outputConfig"] = req.output_config
     return kwargs
 
 

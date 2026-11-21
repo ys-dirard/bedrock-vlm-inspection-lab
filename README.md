@@ -173,3 +173,18 @@ uv run vlmlab mmad report runs/... --out results644 --subset data/splits/mmad_64
 - 設定は `configs/m1_*.yaml`。Claude は Messages API の本文（InvokeModel）、Nova 2 Lite は Converse で呼びます
 - `vlmlab mmad batch-prepare` / `batch-collect` はバッチ推論用ですが、アカウントでバッチ推論が許可されておらず、ジョブでは試せていません
 - 問題と画像はコミットしていません。MMAD は研究目的での利用とされています。画像の元のデータセット（MVTec AD・MVTec LOCO・VisA・GoodsAD など）のライセンスにも従ってください
+
+## 日本語の請求書の読み取り（12/23 の記事）
+
+架空の適格請求書60枚（きれいな画像・劣化させた画像の計120枚）を作り、Converse で項目を読み取らせて正解と比べます。会社名・住所・登録番号はすべて架空です（登録番号は国税庁の検査用数字の計算方法に合わせた番号）。
+
+```bash
+uv run vlmlab invoice generate --font path/to/NotoSansJP-VF.ttf   # 正解（data/splits/invoice_*.jsonl・csv）と画像（data/invoice/）
+uv run vlmlab invoice run configs/inv_h_so.yaml --limit 2         # 試運転（inv0001 のきれい・劣化）
+uv run vlmlab invoice run configs/inv_h_so.yaml                   # 本番
+uv run vlmlab invoice report runs/invoice/inv_h_so runs/invoice/inv_n --out out/  # 採点（API は呼ばない）
+```
+
+- 条件は `configs/inv_*.yaml`：H-SO（Claude Haiku 4.5、構造化出力あり）、H-P（同、プロンプトで JSON）、N（Nova 2 Lite）、N-T（Nova 2 Lite、上下2枚）、Q（Qwen3 VL 235B A22B）。`*_rep2.yaml` は揺れの基準の2回目
+- フォントは Noto Sans JP（SIL Open Font License 1.1）。フォントの SHA-256 と画像の SHA-256 は `data/invoice/manifest.json` に残ります
+- 採点・整合チェックの決まりは `docs/contracts.md` の invoice の節

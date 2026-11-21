@@ -14,6 +14,11 @@
   vlmlab mmad batch-prepare CONFIG                   バッチ推論の入力（JSONL）を作る
   vlmlab mmad batch-collect CONFIG OUT_FILE... [--job-arn ARN]   バッチの出力を記録にする
   vlmlab mmad report RUN_DIR... --out DIR
+
+  請求書（12/23 の記事）
+  vlmlab invoice generate [--font PATH]               架空の請求書60枚の正解と、きれい・劣化の画像を作る
+  vlmlab invoice run CONFIG [--limit N] [--dry-run]   Converse で抽出する（試運転は --limit 2）
+  vlmlab invoice report RUN_DIR... --out DIR [--no-fence]   採点と集計（API は呼ばない）
 """
 
 from __future__ import annotations
@@ -96,9 +101,26 @@ def main(argv: list[str] | None = None) -> None:
     mrep.add_argument("--out", required=True)
     mrep.add_argument("--subset", default=None, help="この一覧（CSV）の record_id だけで集計する")
 
+    iv = sub.add_parser("invoice", help="日本語の請求書の読み取り（12/23 の記事）")
+    isub = iv.add_subparsers(dest="icmd", required=True)
+    ig = isub.add_parser("generate")
+    ig.add_argument("--font", default=None, help="Noto Sans JP のフォントファイル（OFL 1.1）")
+    ir = isub.add_parser("run")
+    ir.add_argument("config")
+    ir.add_argument("--limit", type=int, default=None)
+    ir.add_argument("--dry-run", action="store_true")
+    ir.add_argument("--pricing", default="pricing.yaml")
+    ir.add_argument("--runs-dir", default="runs")
+    irep = isub.add_parser("report")
+    irep.add_argument("run_dirs", nargs="+")
+    irep.add_argument("--out", required=True)
+    irep.add_argument("--no-fence", action="store_true", help="```json の囲みも解析失敗として扱う")
+
     a = p.parse_args(argv)
     if a.cmd == "mmad":
         _mmad(a)
+    elif a.cmd == "invoice":
+        _invoice(a)
     elif a.cmd == "fetch":
         from .data import download, extract
         tar = download(ROOT / a.raw_dir)
@@ -210,6 +232,34 @@ def _mmad(a: argparse.Namespace) -> None:
         subset = set(md.load_split(ROOT / a.subset)["record_id"]) if a.subset else None
         for k, v in build_report(a.run_dirs, a.out, subset).items():
             print(f"{k}: {v}")
+
+
+def _invoice(a: argparse.Namespace) -> None:
+    from .cost import PricingTable
+    from .invoice import generate as ig
+    from .invoice import run as irun
+
+    if a.icmd == "generate":
+        from .invoice.render import find_font
+        m = ig.generate(ROOT, find_font(a.font, ROOT))
+        print(json.dumps({k: v for k, v in m.items() if k != "image_sha256"}, ensure_ascii=False, indent=2))
+    elif a.icmd == "run":
+        cfg = irun.InvoiceConfig.load(a.config)
+        pricing = PricingTable.load(ROOT / a.pricing)
+        price = pricing.get(cfg.model_id, "standard")
+        if a.dry_run:
+            rows = irun.select_trial(irun.load_split(ROOT / cfg.split, cfg.variants), a.limit)
+            print(json.dumps({"calls": len(rows), "doc_ids": [r["doc_id"] for r in rows], "model_id": cfg.model_id,
+                              "structured": cfg.structured, "split_halves": cfg.split_halves,
+                              "price_known": price.runnable}, ensure_ascii=False, indent=2))
+            return
+        from .bedrock import BedrockConverse
+        print(irun.execute(cfg, ROOT, ROOT / a.runs_dir, pricing, BedrockConverse(cfg.region), a.limit))
+    elif a.icmd == "report":
+        from .invoice.report import build_report
+        truths = ig.load_truths(ROOT / ig.TRUTH_PATH)
+        table = build_report([Path(d) for d in a.run_dirs], truths, Path(a.out), allow_fence=not a.no_fence)
+        print(table.to_string())
 
 
 if __name__ == "__main__":

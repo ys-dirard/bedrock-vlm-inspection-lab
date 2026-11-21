@@ -1,0 +1,9 @@
+# 12/23 Q：Qwen3 VL 235B A22B（東京の In-Region）、プロンプトで JSON を指示（構造化出力は非対応）
+name: inv_q
+condition: Q
+model_id: qwen.qwen3-vl-235b-a22b
+region: ap-northeast-1
+structured: false
+variants: [clean, degraded]
+inference: {temperature: 0, maxTokens: 2000}
+budget_usd: 0.8

@@ -1,0 +1,9 @@
+# 12/23 H-P：Claude Haiku 4.5、プロンプトでスキーマを示して JSON を指示
+name: inv_h_p
+condition: H-P
+model_id: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+region: ap-northeast-1
+structured: false
+variants: [clean, degraded]
+inference: {temperature: 0, maxTokens: 2000}
+budget_usd: 1.2

@@ -1,0 +1,10 @@
+# 12/23 揺れの基準：N のきれいな60枚をもう1回
+name: inv_n_rep2
+condition: N
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+structured: false
+variants: [clean]
+repeat: 2
+inference: {temperature: 0, maxTokens: 2000}
+budget_usd: 0.3
