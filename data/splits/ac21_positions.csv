@@ -1,0 +1,301 @@
+item_id,category,defect_type,cell,cell_share,n_cells
+candle/anomaly/004,candle,chunk of wax missing,右上,1.0,1
+candle/anomaly/007,candle,chunk of wax missing,左上,1.0,1
+candle/anomaly/009,candle,chunk of wax missing,下,0.533,2
+candle/anomaly/011,candle,damaged corner of packaging,右下,1.0,1
+candle/anomaly/012,candle,damaged corner of packaging,中央,0.9907,2
+candle/anomaly/013,candle,damaged corner of packaging,下,0.8321,2
+candle/anomaly/014,candle,damaged corner of packaging,右上,0.5397,2
+candle/anomaly/019,candle,damaged corner of packaging,左下,0.9944,2
+candle/anomaly/021,candle,damaged corner of packaging,下,1.0,1
+candle/anomaly/025,candle,damaged corner of packaging,右,1.0,1
+candle/anomaly/031,candle,weird candle wick,左下,1.0,1
+candle/anomaly/033,candle,weird candle wick,左上,0.6829,2
+candle/anomaly/035,candle,weird candle wick,左下,1.0,1
+candle/anomaly/038,candle,weird candle wick,右下,1.0,1
+candle/anomaly/039,candle,weird candle wick,左下,1.0,1
+candle/anomaly/043,candle,different colour spot,右下,1.0,1
+candle/anomaly/047,candle,different colour spot,右,1.0,1
+candle/anomaly/049,candle,different colour spot,中央,1.0,1
+candle/anomaly/051,candle,different colour spot,上,1.0,1
+candle/anomaly/061,candle,extra wax in candle,右下,1.0,1
+candle/anomaly/063,candle,extra wax in candle,右上,0.5629,2
+candle/anomaly/074,candle,foreign particals on candle,左上,0.9384,2
+candle/anomaly/075,candle,foreign particals on candle,右下,0.8098,2
+candle/anomaly/076,candle,foreign particals on candle,左下,0.8612,3
+candle/anomaly/078,candle,foreign particals on candle,右上,1.0,1
+candle/anomaly/085,candle,wax melded out of the candle,右下,1.0,1
+candle/anomaly/091,candle,wax melded out of the candle,左下,0.996,2
+candle/anomaly/093,candle,wax melded out of the candle,右上,1.0,1
+candle/anomaly/096,candle,wax melded out of the candle,左,1.0,1
+candle/anomaly/097,candle,wax melded out of the candle,下,0.4862,4
+cashew/anomaly/006,cashew,burnt,中央,0.5978,2
+cashew/anomaly/007,cashew,burnt,中央,1.0,1
+cashew/anomaly/012,cashew,corner or edge breakage,右,1.0,1
+cashew/anomaly/014,cashew,corner or edge breakage,右,1.0,1
+cashew/anomaly/015,cashew,corner or edge breakage,上,0.6733,2
+cashew/anomaly/019,cashew,corner or edge breakage,左,0.8619,2
+cashew/anomaly/021,cashew,corner or edge breakage,中央,1.0,1
+cashew/anomaly/029,cashew,different colour spot,中央,0.8287,2
+cashew/anomaly/031,cashew,different colour spot,中央,1.0,1
+cashew/anomaly/033,cashew,middle breakage,中央,0.9362,2
+cashew/anomaly/034,cashew,middle breakage,中央,1.0,1
+cashew/anomaly/036,cashew,middle breakage,中央,1.0,1
+cashew/anomaly/039,cashew,small holes,中央,0.8153,2
+cashew/anomaly/044,cashew,same colour spot,中央,0.7406,2
+cashew/anomaly/048,cashew,corner or edge breakage,左,0.9353,2
+cashew/anomaly/050,cashew,same colour spot,右,1.0,1
+cashew/anomaly/053,cashew,same colour spot,中央,1.0,1
+cashew/anomaly/056,cashew,same colour spot,右,1.0,1
+cashew/anomaly/065,cashew,small holes,中央,0.5433,2
+cashew/anomaly/071,cashew,small holes,中央,1.0,1
+cashew/anomaly/074,cashew,small holes,中央,0.891,2
+cashew/anomaly/075,cashew,small holes,中央,1.0,1
+cashew/anomaly/076,cashew,small holes,中央,1.0,1
+cashew/anomaly/077,cashew,small holes,中央,1.0,1
+cashew/anomaly/078,cashew,small scratches,右,0.826,2
+cashew/anomaly/082,cashew,small scratches,中央,1.0,1
+cashew/anomaly/084,cashew,small scratches,右,0.6243,2
+cashew/anomaly/085,cashew,small scratches,中央,1.0,1
+cashew/anomaly/090,cashew,small scratches,中央,0.9606,2
+cashew/anomaly/096,cashew,stuck together,中央,0.4678,9
+chewinggum/anomaly/020,chewinggum,chunk of gum missing,中央,0.5612,2
+chewinggum/anomaly/023,chewinggum,chunk of gum missing,下,1.0,1
+chewinggum/anomaly/025,chewinggum,corner missing,右下,1.0,1
+chewinggum/anomaly/027,chewinggum,corner missing,左下,1.0,1
+chewinggum/anomaly/028,chewinggum,corner missing,右下,0.5842,2
+chewinggum/anomaly/031,chewinggum,corner missing,左,1.0,1
+chewinggum/anomaly/033,chewinggum,corner missing,左下,0.5318,2
+chewinggum/anomaly/036,chewinggum,corner missing,左,1.0,1
+chewinggum/anomaly/037,chewinggum,corner missing,左下,1.0,1
+chewinggum/anomaly/039,chewinggum,corner missing,右下,0.51,4
+chewinggum/anomaly/043,chewinggum,chunk of gum missing,中央,0.7651,2
+chewinggum/anomaly/052,chewinggum,chunk of gum missing,中央,0.9529,2
+chewinggum/anomaly/054,chewinggum,chunk of gum missing,中央,0.9563,2
+chewinggum/anomaly/056,chewinggum,chunk of gum missing,中央,1.0,1
+chewinggum/anomaly/058,chewinggum,chunk of gum missing,中央,0.7556,2
+chewinggum/anomaly/068,chewinggum,scratches,右,0.7013,2
+chewinggum/anomaly/069,chewinggum,scratches,中央,0.8298,2
+chewinggum/anomaly/070,chewinggum,scratches,中央,0.8138,2
+chewinggum/anomaly/071,chewinggum,scratches,中央,0.7005,3
+chewinggum/anomaly/073,chewinggum,scratches,中央,0.8882,3
+chewinggum/anomaly/074,chewinggum,scratches,中央,1.0,1
+chewinggum/anomaly/077,chewinggum,similar colour spot,中央,0.8856,2
+chewinggum/anomaly/082,chewinggum,similar colour spot,左,1.0,1
+chewinggum/anomaly/088,chewinggum,similar colour spot,中央,1.0,1
+chewinggum/anomaly/089,chewinggum,similar colour spot,下,1.0,1
+chewinggum/anomaly/090,chewinggum,similar colour spot,下,0.6128,2
+chewinggum/anomaly/092,chewinggum,similar colour spot,左下,0.9554,2
+chewinggum/anomaly/095,chewinggum,similar colour spot,右,0.621,2
+chewinggum/anomaly/096,chewinggum,similar colour spot,右,1.0,1
+chewinggum/anomaly/097,chewinggum,similar colour spot,下,0.9969,2
+fryum/anomaly/004,fryum,burnt,中央,0.8923,2
+fryum/anomaly/005,fryum,burnt,中央,0.9496,2
+fryum/anomaly/007,fryum,similar colour spot,中央,0.4838,3
+fryum/anomaly/009,fryum,burnt,下,0.5717,4
+fryum/anomaly/010,fryum,corner or edge breakage,左,1.0,1
+fryum/anomaly/011,fryum,corner or edge breakage,中央,0.6069,2
+fryum/anomaly/016,fryum,middle breakage,右,1.0,1
+fryum/anomaly/019,fryum,corner or edge breakage,左,1.0,1
+fryum/anomaly/023,fryum,different colour spot,中央,1.0,1
+fryum/anomaly/032,fryum,different colour spot,上,1.0,1
+fryum/anomaly/034,fryum,different colour spot,下,1.0,1
+fryum/anomaly/035,fryum,similar colour spot,中央,0.9759,2
+fryum/anomaly/037,fryum,similar colour spot,中央,0.8286,2
+fryum/anomaly/038,fryum,different colour spot,右,1.0,1
+fryum/anomaly/039,fryum,different colour spot,中央,1.0,1
+fryum/anomaly/043,fryum,fryum stuck together,中央,0.5012,6
+fryum/anomaly/044,fryum,fryum stuck together,中央,0.3709,6
+fryum/anomaly/046,fryum,fryum stuck together,中央,0.5228,7
+fryum/anomaly/048,fryum,fryum stuck together,中央,0.4821,7
+fryum/anomaly/049,fryum,fryum stuck together,中央,0.4946,7
+fryum/anomaly/059,fryum,fryum stuck together,中央,0.3895,8
+fryum/anomaly/071,fryum,middle breakage,中央,0.9282,2
+fryum/anomaly/072,fryum,middle breakage,中央,0.8741,2
+fryum/anomaly/073,fryum,middle breakage,中央,1.0,1
+fryum/anomaly/075,fryum,middle breakage,中央,1.0,1
+fryum/anomaly/083,fryum,similar colour spot,中央,0.9861,2
+fryum/anomaly/091,fryum,small scratches,中央,1.0,1
+fryum/anomaly/092,fryum,small scratches,上,1.0,1
+fryum/anomaly/095,fryum,small scratches,右,0.7307,3
+fryum/anomaly/096,fryum,similar colour spot,下,1.0,1
+macaroni1/anomaly/004,macaroni1,chip around edge and corner,右上,1.0,1
+macaroni1/anomaly/007,macaroni1,chip around edge and corner,左,1.0,1
+macaroni1/anomaly/010,macaroni1,chip around edge and corner,中央,0.6485,2
+macaroni1/anomaly/012,macaroni1,chip around edge and corner,左,1.0,1
+macaroni1/anomaly/013,macaroni1,chip around edge and corner,右,0.9843,2
+macaroni1/anomaly/016,macaroni1,chip around edge and corner,左上,1.0,1
+macaroni1/anomaly/021,macaroni1,chip around edge and corner,左上,0.9921,2
+macaroni1/anomaly/024,macaroni1,different colour spot,右上,1.0,1
+macaroni1/anomaly/025,macaroni1,different colour spot,右,1.0,1
+macaroni1/anomaly/028,macaroni1,different colour spot,中央,0.5161,2
+macaroni1/anomaly/034,macaroni1,different colour spot,下,1.0,1
+macaroni1/anomaly/037,macaroni1,different colour spot,下,0.9379,2
+macaroni1/anomaly/050,macaroni1,similar colour spot,左,0.9901,2
+macaroni1/anomaly/051,macaroni1,similar colour spot,上,1.0,1
+macaroni1/anomaly/056,macaroni1,similar colour spot,上,0.7786,2
+macaroni1/anomaly/057,macaroni1,similar colour spot,下,1.0,1
+macaroni1/anomaly/059,macaroni1,similar colour spot,右下,0.7654,2
+macaroni1/anomaly/062,macaroni1,similar colour spot,右上,1.0,1
+macaroni1/anomaly/064,macaroni1,similar colour spot,右上,1.0,1
+macaroni1/anomaly/067,macaroni1,similar colour spot,上,0.6259,3
+macaroni1/anomaly/071,macaroni1,small cracks,左下,0.6343,3
+macaroni1/anomaly/072,macaroni1,small cracks,下,0.4509,4
+macaroni1/anomaly/074,macaroni1,small cracks,左下,0.6003,2
+macaroni1/anomaly/075,macaroni1,small cracks,下,0.811,2
+macaroni1/anomaly/082,macaroni1,small cracks,下,0.9282,2
+macaroni1/anomaly/084,macaroni1,small cracks,下,0.6121,2
+macaroni1/anomaly/087,macaroni1,small scratches,右,0.9007,2
+macaroni1/anomaly/088,macaroni1,small scratches,中央,0.5061,2
+macaroni1/anomaly/093,macaroni1,small scratches,右,0.9564,2
+macaroni1/anomaly/099,macaroni1,small scratches,右,0.7454,4
+macaroni2/anomaly/004,macaroni2,breakage down the middle,中央,1.0,1
+macaroni2/anomaly/013,macaroni2,color spot similar to the object,中央,1.0,1
+macaroni2/anomaly/014,macaroni2,color spot similar to the object,中央,1.0,1
+macaroni2/anomaly/016,macaroni2,color spot similar to the object,左,1.0,1
+macaroni2/anomaly/018,macaroni2,color spot similar to the object,右下,1.0,1
+macaroni2/anomaly/019,macaroni2,color spot similar to the object,右下,1.0,1
+macaroni2/anomaly/021,macaroni2,color spot similar to the object,上,1.0,1
+macaroni2/anomaly/025,macaroni2,color spot similar to the object,左下,1.0,1
+macaroni2/anomaly/027,macaroni2,color spot similar to the object,左,1.0,1
+macaroni2/anomaly/028,macaroni2,color spot similar to the object,右下,1.0,1
+macaroni2/anomaly/031,macaroni2,different color spot,右,1.0,1
+macaroni2/anomaly/037,macaroni2,different color spot,右,1.0,1
+macaroni2/anomaly/040,macaroni2,different color spot,右上,1.0,1
+macaroni2/anomaly/044,macaroni2,different color spot,右上,1.0,1
+macaroni2/anomaly/049,macaroni2,small chip around edge,左,1.0,1
+macaroni2/anomaly/050,macaroni2,small chip around edge,右上,1.0,1
+macaroni2/anomaly/052,macaroni2,small chip around edge,左,1.0,1
+macaroni2/anomaly/054,macaroni2,small chip around edge,左下,1.0,1
+macaroni2/anomaly/055,macaroni2,small chip around edge,上,1.0,1
+macaroni2/anomaly/057,macaroni2,small chip around edge,中央,1.0,1
+macaroni2/anomaly/060,macaroni2,small chip around edge,左,1.0,1
+macaroni2/anomaly/066,macaroni2,small chip around edge,左,1.0,1
+macaroni2/anomaly/074,macaroni2,small cracks,左下,1.0,1
+macaroni2/anomaly/078,macaroni2,small cracks,右,0.6429,2
+macaroni2/anomaly/087,macaroni2,small scratches,上,0.9822,2
+macaroni2/anomaly/088,macaroni2,small scratches,左上,1.0,1
+macaroni2/anomaly/089,macaroni2,small scratches,右上,0.8944,2
+macaroni2/anomaly/091,macaroni2,small scratches,上,0.9808,2
+macaroni2/anomaly/094,macaroni2,small scratches,左下,0.575,3
+macaroni2/anomaly/096,macaroni2,small scratches,右下,1.0,1
+pcb1/anomaly/004,pcb1,bent,下,1.0,1
+pcb1/anomaly/005,pcb1,bent,下,1.0,1
+pcb1/anomaly/010,pcb1,bent,下,1.0,1
+pcb1/anomaly/012,pcb1,bent,下,1.0,1
+pcb1/anomaly/013,pcb1,bent,下,1.0,1
+pcb1/anomaly/016,pcb1,melt,下,1.0,1
+pcb1/anomaly/017,pcb1,melt,中央,0.6113,2
+pcb1/anomaly/019,pcb1,melt,下,0.5709,4
+pcb1/anomaly/028,pcb1,melt,下,1.0,1
+pcb1/anomaly/030,pcb1,melt,下,1.0,1
+pcb1/anomaly/032,pcb1,melt,下,1.0,1
+pcb1/anomaly/033,pcb1,melt,下,0.8374,2
+pcb1/anomaly/035,pcb1,melt,中央,0.7299,2
+pcb1/anomaly/037,pcb1,melt,下,0.637,4
+pcb1/anomaly/042,pcb1,missing,中央,1.0,1
+pcb1/anomaly/045,pcb1,missing,左,0.3823,3
+pcb1/anomaly/047,pcb1,missing,下,1.0,1
+pcb1/anomaly/050,pcb1,missing,左,0.5997,2
+pcb1/anomaly/054,pcb1,missing,右,0.691,2
+pcb1/anomaly/067,pcb1,melt,左下,0.6434,4
+pcb1/anomaly/070,pcb1,melt,上,0.7163,2
+pcb1/anomaly/071,pcb1,melt,中央,1.0,1
+pcb1/anomaly/072,pcb1,melt,下,0.8353,2
+pcb1/anomaly/073,pcb1,melt,上,0.7717,3
+pcb1/anomaly/074,pcb1,melt,上,0.5956,3
+pcb1/anomaly/075,pcb1,melt,下,0.6588,2
+pcb1/anomaly/076,pcb1,melt,下,0.8367,2
+pcb1/anomaly/083,pcb1,melt,上,1.0,1
+pcb1/anomaly/085,pcb1,scratch,中央,1.0,1
+pcb1/anomaly/093,pcb1,scratch,中央,1.0,1
+pcb2/anomaly/005,pcb2,bent,上,0.9958,2
+pcb2/anomaly/007,pcb2,bent,上,0.9909,2
+pcb2/anomaly/012,pcb2,bent,中央,1.0,1
+pcb2/anomaly/013,pcb2,bent,上,0.9935,3
+pcb2/anomaly/014,pcb2,bent,中央,0.9705,2
+pcb2/anomaly/015,pcb2,melt,右,0.9516,2
+pcb2/anomaly/018,pcb2,melt,中央,1.0,1
+pcb2/anomaly/019,pcb2,melt,中央,1.0,1
+pcb2/anomaly/021,pcb2,melt,中央,0.4991,3
+pcb2/anomaly/029,pcb2,melt,左,1.0,1
+pcb2/anomaly/031,pcb2,melt,中央,1.0,1
+pcb2/anomaly/034,pcb2,melt,上,0.9094,2
+pcb2/anomaly/035,pcb2,melt,中央,0.5446,2
+pcb2/anomaly/039,pcb2,melt,中央,1.0,1
+pcb2/anomaly/041,pcb2,missing,左,1.0,1
+pcb2/anomaly/050,pcb2,missing,上,1.0,1
+pcb2/anomaly/052,pcb2,missing,上,1.0,1
+pcb2/anomaly/055,pcb2,missing,中央,1.0,1
+pcb2/anomaly/057,pcb2,missing,中央,1.0,1
+pcb2/anomaly/070,pcb2,melt,下,0.538,2
+pcb2/anomaly/072,pcb2,melt,上,0.6191,2
+pcb2/anomaly/073,pcb2,melt,下,0.6003,2
+pcb2/anomaly/074,pcb2,melt,右,1.0,1
+pcb2/anomaly/075,pcb2,melt,左,1.0,1
+pcb2/anomaly/076,pcb2,melt,中央,1.0,1
+pcb2/anomaly/077,pcb2,melt,中央,1.0,1
+pcb2/anomaly/078,pcb2,melt,中央,0.6641,2
+pcb2/anomaly/084,pcb2,melt,左,0.8606,2
+pcb2/anomaly/085,pcb2,scratch,中央,0.5223,3
+pcb2/anomaly/093,pcb2,scratch,中央,0.673,2
+pcb3/anomaly/004,pcb3,bent,右,0.9612,2
+pcb3/anomaly/005,pcb3,bent,中央,0.8416,2
+pcb3/anomaly/010,pcb3,bent,右,0.5512,2
+pcb3/anomaly/012,pcb3,bent,左,1.0,1
+pcb3/anomaly/013,pcb3,bent,右上,0.5088,4
+pcb3/anomaly/016,pcb3,bent,左,1.0,1
+pcb3/anomaly/017,pcb3,bent,左,1.0,1
+pcb3/anomaly/019,pcb3,bent,中央,0.7765,2
+pcb3/anomaly/028,pcb3,melt,中央,1.0,1
+pcb3/anomaly/030,pcb3,melt,中央,1.0,1
+pcb3/anomaly/032,pcb3,melt,右,0.9128,2
+pcb3/anomaly/033,pcb3,melt,中央,1.0,1
+pcb3/anomaly/035,pcb3,melt,中央,0.8835,2
+pcb3/anomaly/037,pcb3,melt,中央,1.0,1
+pcb3/anomaly/041,pcb3,missing,中央,1.0,1
+pcb3/anomaly/044,pcb3,missing,右,1.0,1
+pcb3/anomaly/049,pcb3,missing,中央,1.0,1
+pcb3/anomaly/053,pcb3,missing,右,1.0,1
+pcb3/anomaly/055,pcb3,missing,左,1.0,1
+pcb3/anomaly/068,pcb3,melt,左,0.8802,2
+pcb3/anomaly/071,pcb3,melt,右,0.9679,2
+pcb3/anomaly/072,pcb3,melt,左,0.7645,2
+pcb3/anomaly/073,pcb3,melt,中央,1.0,1
+pcb3/anomaly/074,pcb3,melt,中央,0.8482,4
+pcb3/anomaly/075,pcb3,melt,中央,0.9459,2
+pcb3/anomaly/076,pcb3,melt,左,0.9431,2
+pcb3/anomaly/078,pcb3,melt,右,1.0,1
+pcb3/anomaly/084,pcb3,scratch,中央,1.0,1
+pcb3/anomaly/085,pcb3,scratch,中央,1.0,1
+pcb3/anomaly/097,pcb3,scratch,左,0.9702,2
+pipe_fryum/anomaly/004,pipe_fryum,burnt,中央,1.0,1
+pipe_fryum/anomaly/005,pipe_fryum,burnt,中央,1.0,1
+pipe_fryum/anomaly/007,pipe_fryum,burnt,左,1.0,1
+pipe_fryum/anomaly/009,pipe_fryum,burnt,中央,1.0,1
+pipe_fryum/anomaly/010,pipe_fryum,burnt,中央,1.0,1
+pipe_fryum/anomaly/011,pipe_fryum,burnt,中央,1.0,1
+pipe_fryum/anomaly/012,pipe_fryum,burnt,中央,1.0,1
+pipe_fryum/anomaly/016,pipe_fryum,corner and edge breakage,右,1.0,1
+pipe_fryum/anomaly/018,pipe_fryum,corner and edge breakage,左,1.0,1
+pipe_fryum/anomaly/022,pipe_fryum,corner and edge breakage,右,0.8783,2
+pipe_fryum/anomaly/028,pipe_fryum,corner and edge breakage,左,0.5582,3
+pipe_fryum/anomaly/030,pipe_fryum,different colour spot,中央,1.0,1
+pipe_fryum/anomaly/031,pipe_fryum,different colour spot,中央,1.0,1
+pipe_fryum/anomaly/034,pipe_fryum,different colour spot,中央,1.0,1
+pipe_fryum/anomaly/035,pipe_fryum,different colour spot,中央,1.0,1
+pipe_fryum/anomaly/039,pipe_fryum,different colour spot,中央,1.0,1
+pipe_fryum/anomaly/050,pipe_fryum,similar colour spot,中央,1.0,1
+pipe_fryum/anomaly/052,pipe_fryum,similar colour spot,中央,1.0,1
+pipe_fryum/anomaly/054,pipe_fryum,similar colour spot,中央,1.0,1
+pipe_fryum/anomaly/055,pipe_fryum,similar colour spot,中央,0.8303,2
+pipe_fryum/anomaly/065,pipe_fryum,similar colour spot,左,0.6501,2
+pipe_fryum/anomaly/075,pipe_fryum,small scratches,中央,0.963,2
+pipe_fryum/anomaly/076,pipe_fryum,small scratches,中央,0.9134,2
+pipe_fryum/anomaly/077,pipe_fryum,small scratches,中央,1.0,1
+pipe_fryum/anomaly/078,pipe_fryum,small scratches,中央,0.9305,2
+pipe_fryum/anomaly/079,pipe_fryum,small scratches,中央,1.0,1
+pipe_fryum/anomaly/084,pipe_fryum,small scratches,中央,0.9922,2
+pipe_fryum/anomaly/091,pipe_fryum,stuck together,中央,0.3948,7
+pipe_fryum/anomaly/092,pipe_fryum,stuck together,中央,0.6862,6
+pipe_fryum/anomaly/096,pipe_fryum,stuck together,中央,0.8299,4

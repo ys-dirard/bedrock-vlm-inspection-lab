@@ -1,0 +1,8 @@
+# 12/21 の記事：方法 A のクエリ（説明文＝テキストだけの索引を探す）
+name: ac21_query_a
+manifest: data/splits/ac21_query_texts.csv   # 書き手がクエリの文を書いてから python -m vlmlab.search.nlsearch queries で作る
+model_id: amazon.nova-2-multimodal-embeddings-v1:0
+region: us-east-1
+purpose: TEXT_RETRIEVAL
+dimension: 1024
+budget_usd: 0.01

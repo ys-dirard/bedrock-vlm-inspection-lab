@@ -1,0 +1,8 @@
+# 12/21 の記事：方法 A の索引（説明文 300 件をテキストで埋め込む）
+name: ac21_captions_embed
+manifest: data/splits/ac21_captions.csv      # python -m vlmlab.search.nlsearch captions runs/ac21_caption で作る
+model_id: amazon.nova-2-multimodal-embeddings-v1:0
+region: us-east-1
+purpose: GENERIC_INDEX
+dimension: 1024
+budget_usd: 0.02

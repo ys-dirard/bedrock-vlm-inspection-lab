@@ -1,0 +1,23 @@
+# 12/21 の記事：方法 A の説明文づくり（12/20 の索引の不良品 300 枚、Nova 2 Lite）
+# 説明文は raw_text に残る。JSON ではないので parse_error は「読み取らない」の意味で、集計には使わない
+name: ac21_caption
+split: data/splits/ac21_caption_300.csv
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/ac21_caption_v1.txt
+prompt_vars:                       # 品目の呼び名（欠陥の種類は教えない）
+  candle: {object: "ろうそく"}
+  cashew: {object: "カシューナッツ"}
+  chewinggum: {object: "ガム"}
+  fryum: {object: "スナック菓子（フライム）"}
+  macaroni1: {object: "マカロニ"}
+  macaroni2: {object: "マカロニ"}
+  pcb1: {object: "プリント基板"}
+  pcb2: {object: "プリント基板"}
+  pcb3: {object: "プリント基板"}
+  pipe_fryum: {object: "パイプ状のスナック菓子"}
+image_long_edge: null              # 原寸（Nova 2 Lite は画像1枚230トークンで課金）
+inference: {temperature: 0, maxTokens: 300}
+repeats: 1
+budget_usd: 0.40                   # 300 枚 × 約 0.0008 USD = 約 0.24 USD の見込み（試運転の usage で見直す）
