@@ -52,3 +52,18 @@ uv run vlmlab run configs/ab0_tiny_nova2lite.yaml --visa-root data/armbench/tiny
 ```
 
 - `data/armbench/` は .gitignore に入れている
+
+### 本番のデータ：第三者のミラー（2026-11-21 決定）
+
+- `correll/armbench_defect_dataset`（Hugging Face、CC BY 4.0、ゲートなし、revision f2ff404c9b9437fd0a701e679768a5d9ca36467b）の parquet 0〜3番（合計 2,178,123,116 バイト）。公式の配布ではなく、ラベルが公式と同じかは確かめていない
+- parquet の SHA-256 は Hugging Face の LFS の oid と照らし合わせる
+
+```bash
+mkdir -p data/armbench/mirror/parquet
+for i in 0 1 2 3; do f=$(printf "train-%05d-of-00128.parquet" $i)
+  curl -L --fail -o data/armbench/mirror/parquet/$f https://huggingface.co/datasets/correll/armbench_defect_dataset/resolve/f2ff404c9b9437fd0a701e679768a5d9ca36467b/data/$f; done
+uv run --with pyarrow vlmlab armbench export-mirror data/armbench/mirror/parquet/*.parquet --out data/armbench/mirror/images
+uv run vlmlab armbench splits --root data/armbench/mirror/images --splits train test none   --n-normal 100 --n-defect 100 --out data/splits/armbench_eval_200.csv
+```
+
+- 書き出すと 4,412枚（約2.1 GB）。ミラーの id は .jpg 付きと無しが混ざり、中身が PNG の画像（423枚、多くは package_defect）がある。拡張子は中身に合わせて書く（docs/contracts.md の CI-AB7）

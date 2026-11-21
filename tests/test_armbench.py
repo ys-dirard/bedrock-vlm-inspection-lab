@@ -139,3 +139,43 @@ def test_by_defect_type_counts(tmp_path):
     assert row["n_parse_fail"] == 1 and row["recall"] == 1.0 and row["false_positive_rate"] == 0.5
     with pytest.raises(ValueError):
         ab.by_defect_type(df, split.iloc[:-1])
+
+
+JPEG = b"\xff\xd8\xff\xe0" + b"0" * 20
+PNG = b"\x89PNG\r\n\x1a\n" + b"1" * 20
+
+
+def _write_parquet(path, items):
+    pa = pytest.importorskip("pyarrow")
+    pq = pytest.importorskip("pyarrow.parquet")
+    rgb = [{"bytes": b, "path": None} for _, _, b in items]
+    meta = [{"id": i, "label": lab, "sublabel": "none", "polygon": [[0, 0]]} for i, lab, _ in items]
+    pq.write_table(pa.table({"rgb": rgb, "meta": meta}), path)
+
+
+def test_export_mirror_writes_imagenet_layout(tmp_path):
+    _write_parquet(tmp_path / "a.parquet", [(f"{_pick(1)}_1.jpg", "nominal", JPEG), (f"{_pick(1)}_2.jpg", "multi_pick", JPEG)])
+    _write_parquet(tmp_path / "b.parquet", [(f"{_pick(2)}_1", "package_defect", PNG)])  # .jpg の無い id
+    meta = ab.export_mirror([tmp_path / "a.parquet", tmp_path / "b.parquet"], tmp_path / "out")
+    assert meta[["label", "shard", "format", "bytes"]].values.tolist() == [
+        ["nominal", "a.parquet", "jpg", len(JPEG)], ["multi_pick", "a.parquet", "jpg", len(JPEG)],
+        ["package_defect", "b.parquet", "png", len(PNG)]]
+    assert (tmp_path / "out/imagenet/mirror/multi_pick" / f"{_pick(1)}_2.jpg").read_bytes() == JPEG
+    # id は .jpg でも中身が PNG なら、拡張子を .png にして書く（バイト列は変えない）
+    assert (tmp_path / "out/imagenet/mirror/package_defect" / f"{_pick(2)}_1.png").read_bytes() == PNG
+    t = ab.scan_imagenet(tmp_path / "out", test_ids={_pick(2)})
+    assert t.set_index("image_id").loc[f"package_defect/{_pick(2)}_1", "split"] == "test"
+    assert len(t) == 3
+
+
+@pytest.mark.parametrize("items", [
+    [(f"{_pick(1)}_1.jpg", "scratch", JPEG)],
+    [("abc_1.jpg", "nominal", JPEG)],
+    [(f"{_pick(1)}_1.jpg", "nominal", b"GIF89a....")],
+    [(f"{_pick(1)}_1.jpg", "nominal", b"")],
+    [(f"{_pick(1)}_1.jpg", "nominal", JPEG), (f"{_pick(1)}_1.jpg", "nominal", JPEG)],
+])
+def test_export_mirror_rejects_bad_rows(tmp_path, items):
+    _write_parquet(tmp_path / "a.parquet", items)
+    with pytest.raises(ValueError):
+        ab.export_mirror([tmp_path / "a.parquet"], tmp_path / "out")

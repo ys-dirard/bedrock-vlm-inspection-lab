@@ -100,8 +100,9 @@
 - 目的：工場の外観検査で使った「VLM に画像1枚を見せて OK / NG と欠陥の種類を JSON で返させる」方法が、倉庫のピッキングの欠陥（multi_pick・package_defect）にも通用するかを、欠陥の種類ごとの再現率と、正常の誤検知率、1,000枚あたりの費用で測る（plan.md の目的・手順5）
 - 成功条件：評価の一覧が1ピック1枚・欠陥は種類ごとにできるだけ均等・random_state=42 で再現できる。2モデルの全画像に記録があり、種類ごとの集計が記録と一覧だけから出る
 - 拒否条件：一覧と記録の画像の集合が違う。公式の分割（train.csv / test.csv）の ID を数値として読んで0が落ちる。同じピックの別の視点が評価に2枚以上入る
-- 未決（書き手が決める）：データの取り方（本体 65.7 GiB は 5 GB の上限を超える）、画像の縮小（Nova は長辺1,568px にした）、応答の後ろに説明が付いて解析に失敗する件（試運転で Nova 9件中2件）の扱い
-- 観測（試運転で確かめた）：見本の tar では、ラベルが画像（視点）ごとで、同じピックでも視点により nominal と multi_pick に分かれる。見本の tar の imagenet/test/ には、公式の train.csv に載っているピックも入っている
+- 決めたこと（2026-11-21、書き手が決定）：データは第三者のミラー（correll/armbench_defect_dataset、CC BY 4.0）の parquet 4つ（0〜3番、約2.2 GB）から取る。公式の本体（65.7 GiB）は 5 GB の上限を超えるため。公式の分割は使わない（学習しないため）。プロンプトは v2（v1 に「説明や理由は書かないでください。」を足した。12/13 と同じ直し方）
+- 未決：画像の縮小（Nova は長辺1,568px にした）
+- 観測（試運転で確かめた）：見本の tar では、ラベルが画像（視点）ごとで、同じピックでも視点により nominal と multi_pick に分かれる。見本の tar の imagenet/test/ には、公式の train.csv に載っているピックも入っている。ミラーでは元の画像の形式が種類で偏る（評価の200枚で、package_defect は 50枚中 45枚が PNG、nominal は 100枚中 1枚、multi_pick は 0枚）。判定の前に縮めて JPEG（quality=95）で符号化し直すので、送るバイト列の形式はそろうが、元の圧縮の跡の違いが残りうる
 
 | ID | 種類 | 条件 |
 | --- | --- | --- |
@@ -111,6 +112,7 @@
 | CI-AB4 | post | 種類ごとに、件数・有効件数・解析失敗の件数・NG の件数・ng_rate（有効な応答のうち NG の割合）を出す。欠陥の種類では ng_rate が再現率、nominal では誤検知率。解析失敗は分母から除き、件数を併記する（CI-M2 と同じ） |
 | CI-AB5 | post | 種類の一致：NG と判定した欠陥の画像のうち、モデルの defect（multi_pick → multi_pick、package_open・deconstruction → package_defect、列挙に無い値は other、空は None）が正解の種類と同じ割合 |
 | CI-AB6 | post | 全体の指標は CI-M2〜M4・M9・M10 と同じ（NG を陽性、解析失敗を除く）。費用は記録の cost_usd の和 |
+| CI-AB7 | post | ミラーの書き出し：parquet の列 meta の label が nominal・multi_pick・package_defect、id が「21桁_視点」（.jpg は付いても付かなくてもよい。parquet 0〜3番では 4,412枚中 276枚が .jpg 無し）、rgb.bytes が JPEG（先頭 FF D8 FF）か PNG（先頭 89 50 4E 47）でなければ止める。id が parquet をまたいで重なれば止める。画像のバイト列は変えずに imagenet/mirror/<label>/<21桁_視点>.<jpg|png>（拡張子は中身に合わせる）に書き、1枚1行の表（id・label・sublabel・shard・format・bytes）を残す。ミラーのラベルが公式と同じかは確かめていない（assumption） |
 
 ## 前提（assumption）
 

@@ -1,10 +1,10 @@
 # 12/19 の記事：ARMBench の欠陥検知を Nova 2 Lite で判定する（見本なし、1回）。plan.md の手順4
 name: ab1_nova2lite
-split: data/splits/armbench_test_200.csv   # データの取り方が決まってから作る（vlmlab armbench splits）
+split: data/splits/armbench_eval_200.csv   # ミラーの parquet 4つから1ピック1枚（vlmlab armbench splits。画像は --visa-root data/armbench/mirror/images）
 model_id: jp.amazon.nova-2-lite-v1:0
 region: ap-northeast-1
 service_tier: standard
-prompt: prompts/armbench_v1_judge.txt
+prompt: prompts/armbench_v2_judge.txt   # v1 に「説明や理由は書かないでください。」を足した（試運転で Nova が説明を続けて解析に失敗したため。12/13 と同じ直し方、2026-11-21 決定）
 image_long_edge: 1568               # 原寸は 2448x2048 で、1枚 4 MB を超えるものがある。Nova は画像1枚230トークンなので縮めても費用は同じ
 inference: {temperature: 0, maxTokens: 300}
 repeats: 1

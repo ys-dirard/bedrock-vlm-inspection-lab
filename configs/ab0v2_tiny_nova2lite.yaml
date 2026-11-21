@@ -1,0 +1,13 @@
+# 12/19 の記事（試運転）：ARMBench の欠陥検知を Nova 2 Lite で判定する（見本なし、1回）。plan.md の手順4
+name: ab0v2_tiny_nova2lite
+split: data/splits/armbench_tiny_trial.csv   # 試運転：公式の見本（tiny、52枚）から9枚
+model_id: jp.amazon.nova-2-lite-v1:0
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/armbench_v2_judge.txt   # v2 の試運転（v1 の試運転は ab0_tiny_*）
+image_long_edge: 1568               # 原寸は 2448x2048 で、1枚 4 MB を超えるものがある。Nova は画像1枚230トークンなので縮めても費用は同じ
+inference: {temperature: 0, maxTokens: 300}
+repeats: 1
+budget_usd: 0.3                     # 見積り 0.08 USD（results/estimate.md）
+parse:
+  allow_code_fence: true            # 11/11 の n1_B と同じ読み取り規則

@@ -1,4 +1,4 @@
-"""ARMBench の欠陥検知（画像）を、外観検査と同じ方法で判定する（12/19 の記事）。docs/contracts.md の CI-AB1〜AB6。
+"""ARMBench の欠陥検知（画像）を、外観検査と同じ方法で判定する（12/19 の記事）。docs/contracts.md の CI-AB1〜AB7。
 
 出典: ARMBench（Amazon、CC BY 4.0、http://armbench.com 、arXiv:2303.16382）。
 配布: Hugging Face `amazon/armbench-defect-image`（ゲートなし）。本体の armbench-defects-image-0.1.tar.gz は 65.7 GiB で、
@@ -26,7 +26,7 @@ DEFECT_TYPES = ("multi_pick", "package_defect")
 NOMINAL = "nominal"
 TYPES = (NOMINAL, *DEFECT_TYPES)
 COLUMNS = ["image_id", "category", "label", "split", "path", "defect_type", "pick_id", "view"]
-_NAME = re.compile(r"^(?P<pick>\d{21})_(?P<view>\d+)\.jpg$", re.IGNORECASE)
+_NAME = re.compile(r"^(?P<pick>\d{21})_(?P<view>\d+)\.(?:jpg|png)$", re.IGNORECASE)  # ミラーには PNG が混ざる（CI-AB7）
 
 # モデルが返す欠陥の種類（プロンプトで列挙したもの）→ ARMBench の欠陥の種類
 PRED_TYPE = {"multi_pick": "multi_pick", "package_open": "package_defect", "deconstruction": "package_defect"}
@@ -212,3 +212,53 @@ def build_report(run_dirs: list[str | Path], split_csv: str | Path, out_dir: str
     pd.concat(by_type, ignore_index=True).to_csv(paths["by_type"], index=False, lineterminator="\n")
     pd.DataFrame(overall).to_csv(paths["overall"], index=False, lineterminator="\n")
     return paths
+
+
+# ---------------------------------------------------------------- 第三者のミラー（parquet）から画像を書き出す（CI-AB7）
+
+MIRROR_REPO = "correll/armbench_defect_dataset"  # CC BY 4.0。公式の配布ではない（公式のカードは split を保たないと注意している）
+_MAGIC = {b"\xff\xd8\xff": ".jpg", b"\x89PNG": ".png"}
+_MIRROR_ID = re.compile(r"^(?P<pick>\d{21})_(?P<view>\d+)(?:\.jpg)?$")  # ミラーの id には .jpg の無いものもある
+
+
+def export_mirror(parquet_paths: list[str | Path], out_root: str | Path, batch_size: int = 32) -> pd.DataFrame:
+    """ミラーの parquet（列 rgb={bytes, path}、meta={id, label, sublabel, polygon}）から、
+    `<out_root>/imagenet/mirror/<label>/<id の拡張子を中身に合わせた名前>` に画像のバイト列をそのまま書き出し、
+    1枚1行の表（id・label・sublabel・shard・format・bytes）を返す。
+
+    - label が nominal・multi_pick・package_defect 以外、id が「21桁_視点」（.jpg は付いても付かなくてもよい）でない、
+      JPEG でも PNG でもない、id が重なるなら止める
+    - ミラーの id は .jpg 付きと無しが混ざり、中身が PNG のものがある（parquet 0〜3番で 423枚、うち package_defect 316枚）。
+      バイト列は変えず、拡張子だけ中身に合わせる。判定の前に縮めて JPEG で符号化し直すので、送る画像の形式はそろう
+    - pyarrow が要る（`uv run --with pyarrow ...`。既定の依存には入れていない）
+    """
+    import pyarrow.parquet as pq
+
+    out_root = Path(out_root)
+    seen: dict[str, str] = {}
+    rows = []
+    for p in map(Path, parquet_paths):
+        pf = pq.ParquetFile(p)
+        for batch in pf.iter_batches(columns=["rgb", "meta"], batch_size=batch_size):
+            for rgb, meta in zip(batch.column("rgb").to_pylist(), batch.column("meta").to_pylist()):
+                iid, label = meta["id"], meta["label"]
+                if label not in TYPES:
+                    raise ValueError(f"{p.name}: unknown label {label!r} for {iid}")
+                m = _MIRROR_ID.match(iid)
+                if not m:
+                    raise ValueError(f"{p.name}: unexpected id {iid!r}")
+                data = rgb["bytes"] or b""
+                ext = next((e for m, e in _MAGIC.items() if data.startswith(m)), None)
+                if ext is None:
+                    raise ValueError(f"{p.name}: {iid} is neither JPEG nor PNG")
+                if iid in seen:
+                    raise ValueError(f"duplicated id {iid} in {seen[iid]} and {p.name}")
+                seen[iid] = p.name
+                dest = out_root / "imagenet" / "mirror" / label / f"{m['pick']}_{m['view']}{ext}"
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(data)
+                rows.append({"id": iid, "label": label, "sublabel": meta.get("sublabel"), "shard": p.name,
+                             "format": ext.lstrip("."), "bytes": len(data)})
+    if not rows:
+        raise ValueError("no rows in parquet files")
+    return pd.DataFrame(rows)

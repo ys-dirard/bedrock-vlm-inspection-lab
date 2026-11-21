@@ -8,6 +8,7 @@
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
 
   ARMBench（12/19 の記事。画像は vlmlab run --visa-root <ARMBench の根> で渡す）
+  vlmlab armbench export-mirror PARQUET... [--out DIR]   ミラーの parquet から画像を書き出す（uv run --with pyarrow）
   vlmlab armbench splits --root DIR --out CSV --n-normal N --n-defect N [--splits test]
   vlmlab armbench report RUN_DIR... --split CSV --out DIR
 
@@ -78,6 +79,9 @@ def main(argv: list[str] | None = None) -> None:
     abs_.add_argument("--n-normal", type=int, required=True)
     abs_.add_argument("--n-defect", type=int, required=True)
     abs_.add_argument("--out", required=True)
+    abe = absub.add_parser("export-mirror", help="ミラーの parquet から画像を書き出す（uv run --with pyarrow で使う）")
+    abe.add_argument("parquet", nargs="+")
+    abe.add_argument("--out", default="data/armbench/mirror/images")
     abr = absub.add_parser("report", help="欠陥の種類ごとの集計（API は呼ばない）")
     abr.add_argument("run_dirs", nargs="+")
     abr.add_argument("--split", required=True)
@@ -121,6 +125,12 @@ def main(argv: list[str] | None = None) -> None:
         _mmad(a)
     elif a.cmd == "armbench":
         from . import armbench as ab
+        if a.acmd == "export-mirror":
+            meta = ab.export_mirror([ROOT / x for x in a.parquet], ROOT / a.out)
+            meta.to_csv(ROOT / a.out / "mirror_meta.csv", index=False, lineterminator="\n")
+            print(f"exported {len(meta)} images to {ROOT / a.out}")
+            print(meta.groupby(["label", "sublabel"], dropna=False).size().to_string())
+            return
         if a.acmd == "splits":
             table = ab.scan_imagenet(ROOT / a.root, ab.read_pick_ids(ROOT / a.train_ids), ab.read_pick_ids(ROOT / a.test_ids))
             print(table.groupby(["split", "defect_type"]).size().to_string())
