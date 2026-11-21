@@ -103,14 +103,14 @@ def build_report(run_dirs: list[Path], truths: dict[str, dict[str, Any]], out_di
     frames = [scored_frame(load_records(d / "calls.jsonl"), truths, allow_fence) for d in run_dirs]
     allrows = pd.concat(frames, ignore_index=True)
     out_dir.mkdir(parents=True, exist_ok=True)
-    allrows.to_csv(out_dir / "scored_calls.csv", index=False, encoding="utf-8")
+    allrows.to_csv(out_dir / "scored_calls.csv", index=False, encoding="utf-8", lineterminator="\n")
     summ = []
     for (run_name, cond), g in allrows.groupby(["run_name", "condition"], sort=False):
         for variant, gv in [("all", g), *g.groupby("variant")]:
             summ.append({"run_name": run_name, "condition": cond, "variant": variant, **summarize(gv)})
     table = pd.DataFrame(summ)
-    table.to_csv(out_dir / "summary.csv", index=False, encoding="utf-8")
-    (out_dir / "summary.md").write_text(to_markdown(table), encoding="utf-8")
+    table.to_csv(out_dir / "summary.csv", index=False, encoding="utf-8", lineterminator="\n")
+    (out_dir / "summary.md").write_text(to_markdown(table), encoding="utf-8", newline="\n")
     return table
 
 
