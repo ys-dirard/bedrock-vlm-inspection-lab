@@ -1,0 +1,15 @@
+# 12/7 の記事：MVTec AD 2、Nova 2 Lite、良品の見本1枚（11/11 の条件 B と同じプロンプト・見本の付け方）。plan.md の手順3
+name: ac07_ad2_nova
+split: data/splits/mvtec_ad2_100.csv
+refs: data/splits/mvtec_ad2_100_refs.csv
+n_refs: 1
+model_id: jp.amazon.nova-2-lite-v1:0     # JP Geo（東京の単価、オンデマンド）
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/v1_judge.txt            # 品目名を含まないので、差し替えは無い
+image_long_edge: null                   # 原寸（Nova 2 Lite は画像1枚230トークンで課金）。vlmlab mvtec-splits が1回の呼び出しの最大バイト数を出す
+inference: {temperature: 0, maxTokens: 300}
+repeats: 1
+budget_usd: 0.2                         # 100回の見込み 0.033 USD、出力が上限の300トークンでも 0.12 USD
+parse:
+  allow_code_fence: true                # n1_B と同じ読み取り規則
