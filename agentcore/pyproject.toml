@@ -1,0 +1,27 @@
+[project]
+name = "vlmlab-agentcore"
+version = "0.1.0"
+description = "12/16〜12/18 の記事：AgentCore（Runtime・Code Interpreter・Memory・Evaluations）で動かす検査エージェント"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[dependency-groups]
+agent = ["strands-agents==1.65.0", "bedrock-agentcore==1.26.1", "boto3", "pyyaml"]
+dev = [
+    "numpy>=2.5.5",
+    "pandas",
+    "pytest>=8.3",
+    "vlmlab",
+]
+
+[tool.uv]
+default-groups = ["agent", "dev"]
+package = false
+
+[tool.uv.sources]
+vlmlab = { path = "../", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "agents/inspector"]
+addopts = "-p no:cacheprovider"

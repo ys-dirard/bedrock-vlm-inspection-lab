@@ -56,10 +56,10 @@ models:
     service_tier: standard                     # オンデマンド（試運転）
     input_per_mtok: 1.10                       # APN1-MP:APN1_InputTokenCount-Units
     output_per_mtok: 5.50                      # APN1-MP:APN1_OutputTokenCount-Units
-    cache_read_per_mtok: null
-    cache_write_per_mtok: null
-    source_url: "AWS Price List API (AmazonBedrockFoundationModels, ap-northeast-1, publicationDate 2026-10-12)"
-    checked_on: "2026-11-05"
+    cache_read_per_mtok: 0.11                  # APN1-MP:APN1_CacheReadInputTokenCount-Units（12/16 の記事、2026-11-21）
+    cache_write_per_mtok: 1.375                # APN1-MP:APN1_CacheWriteInputTokenCount-Units（5分の TTL。同上）
+    source_url: "AWS Price List API (AmazonBedrockFoundationModels, ap-northeast-1, publicationDate 2026-10-12。入出力とキャッシュは 2026-11-20 版で同じ値)"
+    checked_on: "2026-11-21"
     model_id_source: "aws bedrock list-inference-profiles --region ap-northeast-1（2026-11-05）"
     model_id_checked_on: "2026-11-05"
     note: 料金ページとの照合は未

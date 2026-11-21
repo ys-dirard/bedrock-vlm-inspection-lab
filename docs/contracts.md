@@ -157,3 +157,37 @@
 ### summary.py との突き合わせ（2026-11-05、利用者の許可を得て実行）
 
 - mmad_1050.csv の1,050問に、乱数（random.Random(0)、6割は正解・4割は選択肢から無作為）で答えを作り、本物の `caculate_accuracy_mmad`（commit `49db95b`）と `accuracy_table(mode="script")` に同じ答えを入れた。4データセット×7課題と平均の、すべてのセルの差の最大は 1.4e-14（浮動小数点の誤差）。読めない答えを含まない入力での確認なので、summary.py の削除の不具合（deviations.md の 17）は対象外
+
+## agentcore（12/16〜12/18 の記事：AgentCore の検査エージェント。コードは `agentcore/`）
+
+記事フォルダ（advent-calendar/12-16_agentcore-code-interpreter）の `results/framing.md`（2026-11-21）を元にした契約。判定の本体（`agents/inspector/judge.py`・`preprocess.py`）と `src/agentlab/`（record・runcfg・images）は、11/30 の `platform/`（lab `ac/11-30`、commit f8ef948 の時点）から名前（platformlab → agentlab）だけ変えて持ってきた。11/30 の契約 CI-PL-G1〜G4・CI-PL-R1〜R6 はそのまま引き継ぐ（内容は ac/11-30 の docs/contracts.md の「platform」。要点は下）。
+
+### 決めたこと（2026-11-21、書き手が承認）
+
+| ID | 決めたこと |
+| --- | --- |
+| AC-D1 | 11/30 の judge・preprocess を 12/16〜12/18 の共通の土台にする。12/16 は Runtime に載せ、12/17 はツールなしで手元から呼び、12/18 は 12/16 のトレースを評価する |
+| AC-D2 | 12/16 のモデルは Claude Haiku 4.5（jp.）。ツールあり（v1_agent）とツールなし（v1_judge）を同じ50枚（visa_platform_claude50.csv）で比べる |
+| AC-D3 | Runtime は手元のスクリプトから InvokeAgentRuntime で直接呼ぶ（S3・EventBridge・Step Functions は使わない）。Runtime は何も保存しない |
+
+### 11/30 から引き継ぐ契約（要点）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-PL-G1・G2 | pre | 実験の設定は知らないキーがあれば止める。入力・出力の単価が null なら設定を作らない |
+| CI-PL-G3・G4 | post | run_id は1回だけ決める。prompt_sha は 11月と同じ作り方 |
+| CI-PL-R1〜R3 | post | 記録は 11月のキーをすべて持ち、pred などを足す。トークン数は全ターンの合計で、費用はキャッシュの読み書きを含む |
+| CI-PL-R4 | post | エージェントが例外で止まっても、それまでのトークン数と費用は残す |
+| CI-PL-R5 | post | 正解（label）はモデルに渡さない |
+| CI-PL-R6 | post | 記録の JSON は1行 |
+
+### payload.py（Runtime の入口に渡すペイロード）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-AC-P1 | pre | ペイロードは JSON のオブジェクトで、キーは run_config・image_id・category・label・image_b64（必須）と ref_b64（任意）だけ。足りない・知らないキーがあれば止める |
+| CI-AC-P2 | pre | run_config は CI-PL-G1・G2 で検証する |
+| CI-AC-P3 | pre | label は normal か anomaly。image_id・category は空でない文字列 |
+| CI-AC-P4 | pre | image_b64 は厳密な Base64 で、空でないバイト列になる |
+| CI-AC-P5 | pre | ref_b64 は run_config.n_refs > 0 のときだけ必須で、n_refs が 0 のときに渡されたら止める |
+| CI-AC-P6 | post | ペイロードが条件を満たさないとき、入口は {"error": ...} を返し、モデルも Code Interpreter も呼ばない |
