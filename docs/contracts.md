@@ -170,3 +170,13 @@
 | CI-V4 | post | 選ぶ前に image_id の順に並べ、random_state=42 で選ぶ。入力の並びによらず同じ一覧になる |
 | CI-V5 | post | 見本は各品目の train の良品から3枚（ref_rank 1〜3）。テストと image_id が重なれば書き出さずに止める |
 | CI-V6 | post | 一覧の列は image_id, category, label, split, path, dataset, subtype（見本は ref_rank を足す）。`vlmlab run`（plan_run）が `--image-root` を画像の根にしてそのまま読める |
+
+## subtypes.py（12/15 の記事：異常の種類ごとの集計。API は呼ばない）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-ST1 | pre | 記録と一覧（subtype の列があるもの）を image_id で結ぶ。一覧に無い image_id、一覧の image_id の重複、記録と一覧の正解（label）の食い違い、subtype が good の画像と normal の画像が一致しないとき、は止める |
+| CI-ST2 | post | 回（run_name, repeat）ごとに、範囲（全品目 `all` と品目ごと）×種類ごとに、NG と判定した割合を出す。異常の種類では再現率、good では誤検知率にあたる（`ng_rate_meaning` に書く） |
+| CI-ST3 | post | 解析失敗（pred が None）は分母から除き、n_total・n_valid・n_parse_fail を書く（D3）。有効な行が0件なら割合は None |
+| CI-ST4 | post | 異常の種類ごとに、その種類の異常と同じ範囲の良品すべてで AUROC を出す（同点は 0.5。sklearn の roc_auc_score）。VLM のスコアは不良らしさ（D1）。有効な行にスコアの欠けがある、またはどちらかが0件なら None と理由を返す |
+| CI-ST5 | post | `vlmlab subtypes` は記録の raw_text から読み直して（report.load_run）集計し、subtypes.csv と subtypes.md を出す |

@@ -6,6 +6,7 @@
   vlmlab run CONFIG [--limit N] [--dry-run]
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
+  vlmlab subtypes RUN_DIR... --split CSV --out DIR   異常の種類ごとの再現率・誤検知率・AUROC（12/15。API は呼ばない）
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
 
   MMAD（11/19 の記事）
@@ -63,6 +64,11 @@ def main(argv: list[str] | None = None) -> None:
     e.add_argument("--visa-root", default="data/visa")
     e.add_argument("--pricing", default="pricing.yaml")
     e.add_argument("--runs-dir", default="runs")
+
+    st = sub.add_parser("subtypes", help="異常の種類ごとの集計（12/15 の記事。API は呼ばない）")
+    st.add_argument("run_dirs", nargs="+")
+    st.add_argument("--split", required=True, help="subtype の列がある一覧（例 data/splits/mvtec_loco_200.csv）")
+    st.add_argument("--out", required=True)
 
     rp = sub.add_parser("report")
     rp.add_argument("run_dirs", nargs="+")
@@ -153,6 +159,10 @@ def main(argv: list[str] | None = None) -> None:
         from .embed import NovaEmbedder
         embedder = NovaEmbedder(cfg.model_id, cfg.region, cfg.embedding_purpose, cfg.embedding_dimension)
         execute_embed(cfg, embedder, price, ROOT / a.visa_root, ROOT, ROOT / a.runs_dir, a.limit)
+    elif a.cmd == "subtypes":
+        from .subtypes import build_subtype_report
+        for k, v in build_subtype_report(a.run_dirs, ROOT / a.split, a.out).items():
+            print(f"{k}: {v}")
     elif a.cmd == "report":
         from .report import build_report
         for k, v in build_report(a.run_dirs, a.out, a.tag).items():
