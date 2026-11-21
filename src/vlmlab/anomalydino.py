@@ -51,6 +51,7 @@ class AdConfig:
     rotation: bool = True          # 見本を8方向に回転して足す（公式の agnostic）
     device: str = "cpu"
     num_threads: int | None = None  # None なら torch の既定
+    save_maps: bool = False        # パッチの距離の地図を runs/<name>/maps/ に残す（12/13 の記事。CI-A6）。異常度は変わらない
 
     @classmethod
     def load(cls, path: str | Path) -> "AdConfig":
@@ -211,8 +212,12 @@ class OfficialAnomalyDINO:
                 mask = np.ones(feats.shape[0], dtype=bool)
             d = patch_distances(feats, mask, bank)
             s = image_score(d)
-        return {"score": s, "time_s": time.perf_counter() - t0, "n_patches": int(d.size),
-                "n_foreground": int(np.asarray(mask).sum()), "grid": list(grid)}
+        res = {"score": s, "time_s": time.perf_counter() - t0, "n_patches": int(d.size),
+               "n_foreground": int(np.asarray(mask).sum()), "grid": list(grid)}
+        if self.cfg.save_maps:
+            res["_map"] = (d, np.asarray(mask, dtype=bool))
+        return res
+
 
 
 # ---------------------------------------------------------------- 実行
@@ -225,6 +230,29 @@ def _peak_memory_mb() -> dict[str, float | None]:
         return {"rss_mb": mi.rss / 2**20, "peak_mb": peak / 2**20 if peak else None}
     except ImportError:
         return {"rss_mb": None, "peak_mb": None}
+
+
+def map_filename(image_id: str) -> str:
+    """CI-A6：地図のファイル名。image_id の / を __ に替える。"""
+    if "__" in image_id:
+        raise ValueError(f"image_id must not contain '__': {image_id}")
+    return image_id.replace("/", "__") + ".npz"
+
+
+def save_map(path: Path, distances: np.ndarray, mask: np.ndarray, grid: list[int]) -> None:
+    """CI-A6：パッチの距離（float32）と前景の印を、grid（縦, 横）の形で残す。"""
+    h, w = int(grid[0]), int(grid[1])
+    d = np.asarray(distances, dtype=np.float32)
+    m = np.asarray(mask, dtype=bool)
+    if d.size != h * w or m.size != h * w:
+        raise ValueError(f"map size {d.size}/{m.size} does not match grid {grid}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, dist=d.reshape(h, w), mask=m.reshape(h, w))
+
+
+def load_map(path: Path) -> tuple[np.ndarray, np.ndarray]:
+    with np.load(path) as z:
+        return z["dist"].astype(np.float64), z["mask"].astype(bool)
 
 
 def plan(cfg: AdConfig, root: Path, limit: int | None) -> tuple[str, pd.DataFrame, dict[str, list[pd.Series]]]:
@@ -276,6 +304,9 @@ def execute(cfg: AdConfig, config_path: Path, root: Path, visa_root: Path, runs_
                                  "time_s": time.perf_counter() - t0}
             for _, row in g.iterrows():
                 res = ad.score(visa_root / row["path"], bank)
+                if "_map" in res:
+                    d, m = res.pop("_map")
+                    save_map(out / "maps" / map_filename(row["image_id"]), d, m, res["grid"])
                 if not math.isfinite(res["score"]):
                     raise ValueError(f"{row['image_id']}: non-finite score")
                 rec = {"run_name": run_name, "image_id": row["image_id"], "category": cat, "label": row["label"],

@@ -1,0 +1,20 @@
+# 12/13 の記事：画像を送らず、手元で計測した特徴の文（coarse）だけを Nova Micro に渡す（text_only。CI-E6）
+# 文は vlmlab egress-features で作った runs/egress_features/features.csv の text_coarse 列
+name: e1_micro_coarse
+split: data/splits/visa_test_200.csv
+model_id: apac.amazon.nova-micro-v1:0   # 東京から呼べるのは APAC のプロファイルだけ（jp. は無い。2026-11-21 確認）
+region: ap-northeast-1
+service_tier: standard
+prompt: prompts/egress_v1_text.txt
+prompt_vars:
+  capsules: {item: "capsules（カプセル）"}
+  pcb1: {item: "pcb1（プリント基板）"}
+text_only: true
+features: runs/egress_features/features.csv
+features_column: text_coarse
+n_refs: 0
+inference: {temperature: 0, maxTokens: 100}
+repeats: 1
+budget_usd: 0.05
+parse:
+  allow_code_fence: true            # 11/11 の Nova と同じく、本文全体を包む囲みだけ外す

@@ -146,6 +146,26 @@ uv run --extra anomalydino vlmlab prefilter \
 - `--stage2` は参考：2段目を1枚1回の別の記録に替えた表（`prefilter_summary.md` の「参考：2段目を替えた場合」）と `fig_prefilter_alt.png` を足す。解析失敗は回さない画像と同じ扱い（CI-F9・F10）
 - `prefilter_summary.csv`・`.md`（表1）、`anomalydino_scores.csv`（画像ごと）、`anomalydino_score_summary.csv`（品目ごとの AUROC と分布）、`anomalydino_time.json`、`fig_prefilter.png` を出します。定義は CI-F1〜F8
 
+## 画像を出さずに文だけで判定する（12/13 の記事）
+
+手元の AnomalyDINO の地図から欠陥の候補の領域を測り、区分の言葉に直して、テキストだけを Nova Micro に渡します。区切りは学習用の良品（`data/splits/visa_calib_normal.csv`、テスト・見本と重ならない）だけで決めます。契約は `docs/contracts.md` の CI-A6、CI-E1〜E8。
+
+```bash
+uv sync --extra anomalydino
+# 1. 地図を残す（手元の CPU。AWS は使わない）。テストの異常度は 12/10 の ad1_anomalydino と同じ
+uv run vlmlab anomalydino configs/ad2_maps_test.yaml --visa-root <VisA>
+uv run vlmlab anomalydino configs/ad2_maps_calib.yaml --visa-root <VisA>
+# 2. 領域を測り、文にする（runs/egress_features/features.csv、calibration.csv）
+uv run vlmlab egress-features --test runs/ad2_maps_test --calib runs/ad2_maps_calib --out runs/egress_features
+# 3. 文だけを Nova Micro に渡す（画像は0枚。記録に n_images_sent と sent_text を残す）
+uv run vlmlab run configs/e1_micro_coarse.yaml --limit 5
+uv run vlmlab run configs/e1_micro_fine.yaml --limit 5
+# 4. 表1（文だけ・AnomalyDINO だけ・VLM 直接）
+uv run vlmlab egress-report --features runs/egress_features --text coarse=runs/e1_micro_coarse fine=runs/e1_micro_fine     --direct "VLM 直接（Nova 2 Lite）=runs/n1_B" --out runs/egress_report
+```
+
+Nova Micro は東京からは `apac.amazon.nova-micro-v1:0` でしか呼べず、APAC の6リージョンのどこかで処理されます（2026-11-21 確認）。
+
 ## 記録の形（runs/<name>/calls.jsonl、1行1呼び出し）
 
 | キー | 中身 |

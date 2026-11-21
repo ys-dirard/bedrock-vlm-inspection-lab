@@ -46,6 +46,10 @@ class RunConfig:
     additional_fields: dict[str, Any] | None = None
     repeats: int = 1
     parse: dict[str, Any] = field(default_factory=dict)
+    # 画像を送らず、画像ごとの文（features の CSV の features_column 列）だけを {{features}} に入れて送る（12/13 の記事。CI-E6）
+    text_only: bool = False
+    features: str | None = None
+    features_column: str | None = None
 
     @classmethod
     def load(cls, path: str | Path) -> "RunConfig":
@@ -62,6 +66,10 @@ class RunConfig:
             raise ValueError(f"layout must be one of {LAYOUTS}")
         if cfg.ref_note and cfg.layout != "target_first":
             raise ValueError("ref_note is only used with layout 'target_first'")
+        if cfg.text_only and (cfg.n_refs != 0 or not cfg.features or not cfg.features_column):
+            raise ValueError("text_only requires n_refs: 0, features and features_column")
+        if not cfg.text_only and (cfg.features or cfg.features_column):
+            raise ValueError("features is only used with text_only: true")
         unknown_inf = set(cfg.inference) - {"temperature", "maxTokens", "topP"}
         if unknown_inf:
             raise ValueError(f"unknown inference keys: {sorted(unknown_inf)} (topK などは additional_fields に書く)")
@@ -103,6 +111,7 @@ class RunPlan:
     out_dir: Path
     items: pd.DataFrame
     refs_by_cat: dict[str, list[str]]
+    texts: dict[str, str] = field(default_factory=dict)  # text_only のとき image_id → 文
 
 
 def plan_run(cfg: RunConfig, base_dir: Path, runs_dir: Path, limit: int | None = None) -> RunPlan:
@@ -116,13 +125,49 @@ def plan_run(cfg: RunConfig, base_dir: Path, runs_dir: Path, limit: int | None =
         lacking = [c for c in items.category.unique() if len(refs_by_cat.get(c, [])) < cfg.n_refs]
         if lacking:
             raise ValueError(f"not enough refs for categories {lacking}")
+    texts = load_texts(cfg, base_dir, items) if cfg.text_only else {}
     # 品目ごとの差し替えが足りないことに、途中で（課金のあとで）気づかないよう先に確かめる
     prompt_text, system_text = read_prompts(cfg, base_dir)
-    for cat in items.category.unique():
+    for row in items.drop_duplicates("category").itertuples(index=False):
         for text in filter(None, [prompt_text, system_text]):
-            fill_template(text, cfg.prompt_vars.get(cat, {}))
+            fill_template(text, row_vars(cfg, row, texts))
     run_name = cfg.name if limit is None else f"{cfg.name}__trial{limit}"
-    return RunPlan(cfg, run_name, runs_dir / run_name, items, refs_by_cat)
+    return RunPlan(cfg, run_name, runs_dir / run_name, items, refs_by_cat, texts)
+
+
+def load_texts(cfg: RunConfig, base_dir: Path, items: pd.DataFrame) -> dict[str, str]:
+    """CI-E6：画像ごとの文。全画像に空でない文があり、品目・正解が split と一致しなければ止める。"""
+    feats = pd.read_csv(base_dir / cfg.features, keep_default_na=False)
+    if feats["image_id"].duplicated().any():
+        raise ValueError("duplicated image_id in features")
+    f = feats.set_index("image_id")
+    missing = sorted(set(items["image_id"]) - set(f.index))
+    if missing:
+        raise ValueError(f"features missing for {missing[:5]}")
+    out = {}
+    for row in items.itertuples(index=False):
+        fr = f.loc[row.image_id]
+        if fr["category"] != row.category or fr["label"] != row.label:
+            raise ValueError(f"{row.image_id}: category/label differ between split and features")
+        text = str(fr[cfg.features_column])
+        if not text.strip():
+            raise ValueError(f"{row.image_id}: empty features text")
+        out[row.image_id] = text
+    return out
+
+
+def row_vars(cfg: RunConfig, row: Any, texts: dict[str, str]) -> dict[str, str]:
+    vars_ = dict(cfg.prompt_vars.get(row.category, {}))
+    if cfg.text_only:
+        vars_["features"] = texts[row.image_id]
+    return vars_
+
+
+def features_sha(cfg: RunConfig, base_dir: Path) -> str:
+    """文の中身が変わったら再開しないための要約（features の CSV の image_id と文の列）。"""
+    feats = pd.read_csv(base_dir / cfg.features, keep_default_na=False).sort_values("image_id")
+    payload = json.dumps(list(zip(feats["image_id"], feats[cfg.features_column].astype(str))), ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
 def execute(
@@ -143,6 +188,9 @@ def execute(
     previous = load_jsonl(jsonl)
     prompt_text, system_text = read_prompts(cfg, base_dir)
     identity = call_identity(cfg, prompt_text, system_text)
+    if cfg.text_only:
+        identity.update(text_only=True, features_column=cfg.features_column,
+                        features_sha=features_sha(cfg, base_dir))
     check_resume_identity(previous, identity)
     done = {(r["image_id"], r["repeat"]) for r in previous if r.get("api_error") is None}
     guard = BudgetGuard.resume(cfg.budget_usd, [r.get("cost_usd") for r in previous])  # CI-C6
@@ -172,10 +220,12 @@ def execute(
                 except BudgetExceeded as e:
                     stopped = str(e)
                     break
-                vars_ = cfg.prompt_vars.get(row.category, {})
+                vars_ = row_vars(cfg, row, plan.texts)
+                images = [] if cfg.text_only else (
+                    [img(p) for p in plan.refs_by_cat.get(row.category, [])] + [img(row.path)])
                 req = ModelRequest(
                     model_id=cfg.model_id,
-                    images=[img(p) for p in plan.refs_by_cat.get(row.category, [])] + [img(row.path)],
+                    images=images,
                     text=fill_template(prompt_text, vars_),
                     system=fill_template(system_text, vars_) if system_text else None,
                     temperature=cfg.inference.get("temperature", 0),
@@ -186,9 +236,14 @@ def execute(
                     service_tier=cfg.service_tier,
                     additional_fields=cfg.additional_fields,
                 )
+                if cfg.text_only and req.images:  # CI-E6：画像を1枚でも送るなら呼ばない
+                    raise RuntimeError("text_only run must not send images")
                 called_at = datetime.now(JST).isoformat(timespec="seconds")
                 resp = model.invoke(req)
                 rec = make_record(cfg, run_id, plan.run_name, repeat, row, resp, spec, price, identity, called_at)
+                if cfg.text_only:
+                    rec["n_images_sent"] = len(req.images)
+                    rec["sent_text"] = req.text  # 外に出た文（指示を含む）そのもの
                 # 先に記録を書く（費用が不明で止まるときも、払った呼び出しの記録は残す）
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 f.flush()

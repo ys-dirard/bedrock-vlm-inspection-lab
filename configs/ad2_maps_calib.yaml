@@ -1,0 +1,15 @@
+# 12/13 の記事：12/10 と同じ設定（ad1_anomalydino、短辺448）で、パッチの距離の地図も残す。AWS は使わない
+# 学習用の良品（visa_knn_train の良品から見本を除いたもの）。区分の区切りはこれだけで決める（CI-E1）
+name: ad2_maps_calib
+split: data/splits/visa_calib_normal.csv
+refs: data/splits/visa_refs.csv      # 11/11 と同じ見本（ref_rank 1）
+n_refs: 1
+model_name: dinov2_vits14
+resolution: 448
+masking: true
+rotation: true
+device: cpu
+num_threads: null
+save_maps: true
+anomalydino_commit: dd35b0f1f6ff6146d196fe4efd3457a58ebcb1e0   # dammsi/AnomalyDINO（Apache-2.0）
+dinov2_commit: 7764ea0f912e53c92e82eb78a2a1631e92725fc8        # facebookresearch/dinov2（コードと重みは Apache-2.0）

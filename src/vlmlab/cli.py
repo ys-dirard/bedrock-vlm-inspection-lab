@@ -8,6 +8,8 @@
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
   vlmlab prefilter --scores NAME=RUN... --nova RUN --out DIR   2段構成を記録から計算する（12/10 の記事。API は呼ばない）
   vlmlab anomalydino CONFIG [--limit N]  手元の AnomalyDINO で異常度を出す（12/10 の記事。AWS は使わない。uv sync --extra anomalydino）
+  vlmlab egress-features --test RUN --calib RUN --out DIR   地図から領域を測り、文にする（12/13 の記事。API は呼ばない）
+  vlmlab egress-report --features DIR --text NAME=RUN... --direct NAME=RUN... --out DIR   表1（12/13 の記事。API は呼ばない）
 
   MMAD（11/19 の記事）
   vlmlab mmad prepare                  mmad.json を取得し、data/splits/mmad_1050.csv を作り、使う画像だけ取り出す
@@ -82,6 +84,21 @@ def main(argv: list[str] | None = None) -> None:
     pf.add_argument("--stage2", nargs="*", default=[],
                     help="参考：2段目を替える。表示名=1枚1回の実験（例 \"Nova Pro=runs/n1_D\"）。主の解像度で計算する")
     pf.add_argument("--out", required=True)
+
+    ef = sub.add_parser("egress-features", help="地図から領域を測り、区分の文にする（12/13 の記事。API は呼ばない）")
+    ef.add_argument("--test", required=True, help="テストの地図（例 runs/ad2_maps_test）")
+    ef.add_argument("--calib", required=True, help="学習用の良品の地図（例 runs/ad2_maps_calib）")
+    ef.add_argument("--calib-split", default="data/splits/visa_calib_normal.csv")
+    ef.add_argument("--test-split", default="data/splits/visa_test_200.csv")
+    ef.add_argument("--refs", default="data/splits/visa_refs.csv")
+    ef.add_argument("--patch-quantile", type=float, default=0.999)
+    ef.add_argument("--out", required=True)
+
+    er = sub.add_parser("egress-report", help="表1：文だけ・AnomalyDINO だけ・VLM 直接（12/13 の記事。API は呼ばない）")
+    er.add_argument("--features", required=True, help="egress-features の出力の置き場所")
+    er.add_argument("--text", nargs="+", required=True, help="粒度=実験。例 coarse=runs/e1_micro_coarse")
+    er.add_argument("--direct", nargs="*", default=[], help="表示名=実験。例 \"VLM 直接（Nova 2 Lite）=runs/n1_B\"")
+    er.add_argument("--out", required=True)
 
     m = sub.add_parser("mmad", help="MMAD の選択式の問題（11/19 の記事）")
     msub = m.add_subparsers(dest="mcmd", required=True)
@@ -202,6 +219,33 @@ def main(argv: list[str] | None = None) -> None:
         out = ad_execute(cfg, Path(a.config), ROOT, Path(a.visa_root), ROOT / a.runs_dir,
                          ROOT / a.anomalydino_root, a.limit)
         print(f"out: {out}")
+    elif a.cmd == "egress-features":
+        import pandas as pd
+        from .egress import build_features, calibration_table, load_scores_with_maps, save_calibrations
+        feats, cals = build_features(
+            load_scores_with_maps(a.test), load_scores_with_maps(a.calib), pd.read_csv(ROOT / a.calib_split),
+            pd.read_csv(ROOT / a.refs), pd.read_csv(ROOT / a.test_split), a.patch_quantile)
+        out = Path(a.out)
+        out.mkdir(parents=True, exist_ok=True)
+        feats.to_csv(out / "features.csv", index=False, lineterminator="\n")
+        calibration_table(cals).to_csv(out / "calibration.csv", index=False, lineterminator="\n")
+        save_calibrations(cals, out / "calibration.json")
+        print(f"features: {out / 'features.csv'} ({len(feats)} images)")
+    elif a.cmd == "egress-report":
+        import pandas as pd
+        from .egress import load_calibrations
+        from .egress_report import build_egress_summary, to_markdown
+        fdir = Path(a.features)
+        feats = pd.read_csv(fdir / "features.csv", keep_default_na=False)
+        feats["score"] = feats["score"].astype(float)
+        cals = load_calibrations(fdir / "calibration.json")
+        summary = build_egress_summary(feats, cals, dict(s_.split("=", 1) for s_ in a.text),
+                                       dict(s_.split("=", 1) for s_ in a.direct))
+        out = Path(a.out)
+        out.mkdir(parents=True, exist_ok=True)
+        summary.to_csv(out / "egress_summary.csv", index=False, lineterminator="\n")
+        (out / "egress_summary.md").write_text(to_markdown(summary), encoding="utf-8")
+        print(f"summary: {out / 'egress_summary.csv'}")
     elif a.cmd == "cascade":
         from .cascade import load_embeddings, run_cascade, write_outputs
         from .report import load_run
