@@ -1,6 +1,9 @@
 """検査エージェントの Runtime（vlmlab_ci_inspector）に、画像を1枚ずつ渡して判定させる（12/16〜）。
 
 - 1枚ごとに新しい Runtime のセッションで呼び、判定のあとに StopRuntimeSession で止める（11/30 の P-idle の結果）
+- 止める前に --stop-delay 秒待つ（既定 15）。すぐに止めると、最後のターンとエージェント全体のスパンが CloudWatch に
+  送られる前にセッションが消える（2026-11-21 の試運転で、ツールありの3枚は最後のターンのスパンが欠け、ツールなしの2枚は
+  スパンが0件だった）。OpenTelemetry の BatchSpanProcessor の既定の送信の間隔は 5秒
 - 記録は runs/agentcore/<run_name>.jsonl に1行ずつ追記する（11月と同じキー。Runtime は何も保存しない）
 - 呼ぶ前に「この run の累計 + これまでで最も高かった1枚（最初は --first-guard）」が --budget を超えるなら止める
 - 単価は lab の pricing.yaml（null なら止める＝CI-C5）
@@ -16,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -61,6 +65,7 @@ def main() -> None:
     ap.add_argument("--no-tools", action="store_true")
     ap.add_argument("--prompt-cache", action="store_true")
     ap.add_argument("--prompt", default=None, help="既定はツールありなら v1_agent、なしなら v1_judge")
+    ap.add_argument("--stop-delay", type=float, default=15.0, help="StopRuntimeSession の前に待つ秒数")
     ap.add_argument("--trailing-fence", action="store_true", default=True)
     a = ap.parse_args()
 
@@ -107,6 +112,7 @@ def main() -> None:
                 body = read_body(dp.invoke_agent_runtime(agentRuntimeArn=arn, runtimeSessionId=sid,
                                                          payload=json.dumps(payload).encode("utf-8")))
             finally:
+                time.sleep(a.stop_delay)
                 try:
                     dp.stop_runtime_session(agentRuntimeArn=arn, runtimeSessionId=sid)
                 except Exception as e:  # noqa: BLE001  止められなかったことは表示して続ける（idle 60秒で止まる）
