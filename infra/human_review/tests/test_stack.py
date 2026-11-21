@@ -125,3 +125,12 @@ def test_lambda_asset_contains_only_runtime_files(tmp_path):
     files = sorted(str(p.relative_to(dirs[0])).replace("\\", "/") for p in dirs[0].rglob("*") if p.is_file())
     assert files == ["vlmlab/__init__.py", "vlmlab/parse.py", "vlmlab/review/__init__.py",
                      "vlmlab/review/judge_handler.py", "vlmlab/review/review_handler.py", "vlmlab/review/route.py"]
+
+
+def test_default_route_policy_is_sample_half(template):
+    """2026-11-21 の決定：既定の回し方は sample（rate 0.5、seed ac14）。"""
+    fns = template.find_resources("AWS::Lambda::Function")
+    envs = [f["Properties"]["Environment"]["Variables"] for f in fns.values()
+            if "ROUTE_POLICY_JSON" in f["Properties"].get("Environment", {}).get("Variables", {})]
+    assert len(envs) == 1
+    assert json.loads(envs[0]["ROUTE_POLICY_JSON"]) == {"kind": "sample", "rate": 0.5, "seed": "ac14"}

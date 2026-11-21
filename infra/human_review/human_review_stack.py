@@ -42,8 +42,8 @@ class HumanReviewConfig:
     prompt_path: str = "prompts/v1_judge.txt"
     inference: dict = field(default_factory=lambda: {"temperature": 0, "maxTokens": 300})
     parse_spec: dict = field(default_factory=lambda: {"allow_code_fence": True})  # 11/11 の条件 B と同じ
-    # 回し方は書き手が決める（results/deviations.md）。既定は plan.md のとおり 12/12 の 0.4〜0.8
-    route_policy: dict = field(default_factory=lambda: {"kind": "confidence_band", "lo": 0.4, "hi": 0.8})
+    # 回し方：確信度を使わず、NG と解析失敗は人へ、OK は 50% を抜き取って人へ（2026-11-21 書き手が決定。記事の results/deviations.md の D1-A）
+    route_policy: dict = field(default_factory=lambda: {"kind": "sample", "rate": 0.5, "seed": "ac14"})
     human_timeout_seconds: int = 3600
     function_url_auth: str = "AWS_IAM"  # NONE にするなら書き手と相談（claude-code.md）
     log_retention: logs.RetentionDays = logs.RetentionDays.ONE_WEEK

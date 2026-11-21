@@ -9,8 +9,8 @@ Step Functions のタスクトークンで、人の確認が要る画像だけ�
 | 目的 | 人の確認が要る画像だけ確認を待つ仕組みを動かし、20枚で「自動で確定した件数・人に回った件数・所要時間・費用」を記録する | 記事の plan.md の「目的」、draft.md の【結果】 |
 | 前提（confirmed） | Standard の状態機械だけが `.waitForTaskToken` を使える。待ちは最長1年で、`TimeoutSeconds` を過ぎると `States.Timeout` | Step Functions のドキュメント（記事の results/sources.md） |
 | 前提（confirmed） | Nova 2 Lite（temperature 0）の確信度で 0.4〜0.8 を人へ回すと、200枚のうち0枚（3回とも）。Claude Sonnet 4.6 では36枚・見逃し 0.45 | 12/12 の `results/gray_zone.csv` |
-| 未決（書き手が決める） | 人へ回す規則（確信度の帯／NG と OK の抜き取り／全件）。12/12 の結論「確信度で人に回しても見逃しは残る」と、12/14 の題「グレーな画像だけ人に回す」が食い違う | 記事の results/deviations.md |
-| 未決（書き手が決める） | 関数 URL の認証（既定は AWS_IAM＋ローカルの署名プロキシ） | claude-code.md「関数 URL を公開する場合は認証の方法を相談する」 |
+| 決定（2026-11-21、書き手） | 人へ回す規則は sample（NG と解析失敗は人へ、OK は 50% を抜き取り、seed "ac14"）。12/12 の結論「確信度で人に回しても見逃しは残る」を受けて、確信度を使わない | 記事の results/deviations.md の D1 |
+| 決定（2026-11-21、書き手） | 関数 URL の認証は AWS_IAM＋ローカルの署名プロキシ | claude-code.md「関数 URL を公開する場合は認証の方法を相談する」 |
 | 成功条件 | 20件すべての実行が終わる（auto_decided / human_decided / timed_out のどれか）。人へ回った件は、人の判定が DynamoDB に残る。判定の失敗は自動で OK にならない | CI-HR6・HR12、CI-IR6 |
 | 拒否条件 | 公開の入口（認証なしの URL）を相談なしに作る。正解（label）を状態機械に渡す。費用が 1記事 6 USD を超える | CLAUDE.md、claude-code.md |
 
