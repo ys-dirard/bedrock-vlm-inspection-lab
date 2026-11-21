@@ -2,6 +2,7 @@
 
   vlmlab fetch                         VisA の tar を取得して展開する（認証なし）
   vlmlab splits                        data/splits/ の CSV を作る
+  vlmlab mvtec-splits DATASET --root DIR --categories A B --name NAME   MVTec AD / AD 2 / LOCO AD の一覧（12/7・12/15）
   vlmlab run CONFIG [--limit N] [--dry-run]
   vlmlab embed CONFIG [--limit N] [--dry-run]   条件 E（埋め込み＋k近傍法）
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
@@ -37,11 +38,21 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--visa-root", default="data/visa")
     s.add_argument("--out", default="data/splits")
 
+    mv = sub.add_parser("mvtec-splits", help="MVTec AD / AD 2 / LOCO AD のテストと見本の一覧を作る（12/7・12/15）")
+    mv.add_argument("dataset", choices=["mvtec_ad", "mvtec_ad_2", "mvtec_loco_ad"])
+    mv.add_argument("--root", required=True, help="展開したデータセットの根（例 data/mvtec/mvtec_ad）")
+    mv.add_argument("--image-root", default="data/mvtec", help="一覧の path の基準（vlmlab run --image-root と同じにする）")
+    mv.add_argument("--categories", nargs="+", required=True, help="品目のディレクトリ名")
+    mv.add_argument("--name", required=True, help="出力の名前（data/splits/<name>.csv と <name>_refs.csv）")
+    mv.add_argument("--out", default="data/splits")
+    mv.add_argument("--allow-count-mismatch", action="store_true", help="枚数が論文の表と違っても続ける（警告を出す）")
+
     r = sub.add_parser("run")
     r.add_argument("config")
     r.add_argument("--limit", type=int, default=None, help="試運転の枚数（runs/<name>__trial<N>/ に出す）")
     r.add_argument("--dry-run", action="store_true", help="Bedrock を呼ばず、組み立てた内容だけ表示する")
-    r.add_argument("--visa-root", default="data/visa")
+    r.add_argument("--visa-root", "--image-root", dest="visa_root", default="data/visa",
+                   help="画像の根（一覧の path の基準）。MVTec は data/mvtec")
     r.add_argument("--pricing", default="pricing.yaml")
     r.add_argument("--runs-dir", default="runs")
 
@@ -108,6 +119,8 @@ def main(argv: list[str] | None = None) -> None:
         from .data import write_splits
         for k, v in write_splits(ROOT / a.visa_root, ROOT / a.out).items():
             print(f"{k}: {v}")
+    elif a.cmd == "mvtec-splits":
+        _mvtec_splits(a)
     elif a.cmd == "run":
         from .cost import PricingTable
         from .run import RunConfig, plan_run
@@ -151,6 +164,25 @@ def main(argv: list[str] | None = None) -> None:
         for k, v in write_outputs(res, a.out).items():
             print(f"{k}: {v}")
         print(f"best: {res['best']}")
+
+
+def _mvtec_splits(a: argparse.Namespace) -> None:
+    from . import mvtec
+    listing = mvtec.LISTERS[a.dataset](ROOT / a.root, ROOT / a.image_root, a.categories, a.allow_count_mismatch)
+    for w in listing.warnings:
+        print(f"[warning] {w}")
+    test = mvtec.sample_test(listing.table, mvtec.DEFAULT_COUNTS[a.dataset])
+    refs = mvtec.sample_refs(listing.table)
+    out = ROOT / a.out
+    mvtec.write_split(test, refs, out / f"{a.name}.csv", out / f"{a.name}_refs.csv")
+    print(f"test: {out / (a.name + '.csv')} ({len(test)} images)")
+    print(test.groupby(["category", "subtype"]).size().to_string())
+    print(f"refs: {out / (a.name + '_refs.csv')} ({len(refs)} images)")
+    # Nova は原寸で送る。1回の呼び出し（見本1枚＋検査対象）の画像のバイト数の最大を出す（Nova の上限は全体で 25 MB）
+    ref1 = refs[refs.ref_rank == 1].set_index("category")["path"]
+    root = ROOT / a.image_root
+    sizes = [(root / p).stat().st_size + (root / ref1[c]).stat().st_size for p, c in zip(test["path"], test["category"])]
+    print(f"max bytes per call (1 ref + target, original files): {max(sizes):,}")
 
 
 def _mmad(a: argparse.Namespace) -> None:

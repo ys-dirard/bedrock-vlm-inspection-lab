@@ -1,6 +1,7 @@
 # データ本体（data/README.md の手順で取得する）
 data/raw/
 data/visa/
+data/mvtec/
 
 # 実行結果（記事のフォルダの results/ にコピーする）
 runs/

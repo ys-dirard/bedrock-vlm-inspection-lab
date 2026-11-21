@@ -157,3 +157,16 @@
 ### summary.py との突き合わせ（2026-11-05、利用者の許可を得て実行）
 
 - mmad_1050.csv の1,050問に、乱数（random.Random(0)、6割は正解・4割は選択肢から無作為）で答えを作り、本物の `caculate_accuracy_mmad`（commit `49db95b`）と `accuracy_table(mode="script")` に同じ答えを入れた。4データセット×7課題と平均の、すべてのセルの差の最大は 1.4e-14（浮動小数点の誤差）。読めない答えを含まない入力での確認なので、summary.py の削除の不具合（deviations.md の 17）は対象外
+
+## mvtec.py（12/7・12/15 の記事：MVTec AD・AD 2・LOCO AD の一覧と抜き出し）
+
+目的の整理は記事フォルダ（advent-calendar/12-07_mvtec-contamination、12-15_logical-anomaly-loco）の `framing.md`。データはフォームでの登録が要るので、取得は書き手が行う。ディレクトリの形は推定（実物で未確認）なので、CI-V2 の枚数の照合で外れに気づけるようにする。
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-V1 | post | 正解はディレクトリの名前で決める。AD は test/good が normal、test のそれ以外の下位ディレクトリが anomaly（subtype = 欠陥の種類）。AD 2 は test_public/good が normal、test_public/bad が anomaly で、test_private・test_private_mixed（正解が非公開）・validation・ground_truth は一覧に入れない。LOCO は test の下位ディレクトリが good・logical_anomalies・structural_anomalies のちょうど3つでなければ止める。見本の候補はどれも train/good。path は画像の根からの相対パス（/ 区切り）、image_id は `データセット/品目/分割/下位ディレクトリ/ファイル名の幹` で一意 |
+| CI-V2 | pre | 品目ごとの枚数（AD：train・test の良品・不良品、AD 2：train・validation・test_public の良品・不良品、LOCO：train・validation・test の良品・構造的・論理的）が論文の表と一致しなければ止める。品目名は英数字以外と大文字・小文字を無視して照合する。表に無い品目も止める。`allow_count_mismatch` のときだけ警告にして続ける。表の出典：AD は IJCV 2021 の Table 1、AD 2 は arXiv:2503.21622v1 の Table IV、LOCO は IJCV 2022 の Table 1（2026-11-21 確認） |
+| CI-V3 | post | テストは品目ごと・種類ごとに指定の枚数を選ぶ（AD：良品25・不良品25（欠陥の種類はまとめて選ぶ）、AD 2：good 25・bad 25、LOCO：good 50・logical 25・structural 25）。足りなければ止める（他の種類や品目で埋めない） |
+| CI-V4 | post | 選ぶ前に image_id の順に並べ、random_state=42 で選ぶ。入力の並びによらず同じ一覧になる |
+| CI-V5 | post | 見本は各品目の train の良品から3枚（ref_rank 1〜3）。テストと image_id が重なれば書き出さずに止める |
+| CI-V6 | post | 一覧の列は image_id, category, label, split, path, dataset, subtype（見本は ref_rank を足す）。`vlmlab run`（plan_run）が `--image-root` を画像の根にしてそのまま読める |
