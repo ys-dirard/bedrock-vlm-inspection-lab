@@ -1,0 +1,7 @@
+image_id,ref_rank,category,label,split,path,dataset,subtype
+mvtec_ad/carpet/train/good/033,1,carpet,normal,train,mvtec_ad/carpet/train/good/033.png,mvtec_ad,good
+mvtec_ad/carpet/train/good/108,2,carpet,normal,train,mvtec_ad/carpet/train/good/108.png,mvtec_ad,good
+mvtec_ad/carpet/train/good/240,3,carpet,normal,train,mvtec_ad/carpet/train/good/240.png,mvtec_ad,good
+mvtec_ad/hazelnut/train/good/009,1,hazelnut,normal,train,mvtec_ad/hazelnut/train/good/009.png,mvtec_ad,good
+mvtec_ad/hazelnut/train/good/042,2,hazelnut,normal,train,mvtec_ad/hazelnut/train/good/042.png,mvtec_ad,good
+mvtec_ad/hazelnut/train/good/033,3,hazelnut,normal,train,mvtec_ad/hazelnut/train/good/033.png,mvtec_ad,good

@@ -1,0 +1,7 @@
+image_id,ref_rank,category,label,split,path,dataset,subtype
+mvtec_ad_2/fabric/train/good/314_regular,1,fabric,normal,train,mvtec_ad_2/fabric/train/good/314_regular.png,mvtec_ad_2,good
+mvtec_ad_2/fabric/train/good/152_regular,2,fabric,normal,train,mvtec_ad_2/fabric/train/good/152_regular.png,mvtec_ad_2,good
+mvtec_ad_2/fabric/train/good/090_regular,3,fabric,normal,train,mvtec_ad_2/fabric/train/good/090_regular.png,mvtec_ad_2,good
+mvtec_ad_2/walnuts/train/good/424_regular,1,walnuts,normal,train,mvtec_ad_2/walnuts/train/good/424_regular.png,mvtec_ad_2,good
+mvtec_ad_2/walnuts/train/good/075_regular,2,walnuts,normal,train,mvtec_ad_2/walnuts/train/good/075_regular.png,mvtec_ad_2,good
+mvtec_ad_2/walnuts/train/good/180_regular,3,walnuts,normal,train,mvtec_ad_2/walnuts/train/good/180_regular.png,mvtec_ad_2,good
