@@ -31,9 +31,15 @@ P = {  # facts.md F9（東京、2026-11-20）
     "sfn_transition": 0.000025, "lambda_request": 0.20 / 1e6, "lambda_gb_s_arm": 0.0000133334,
     "ddb_wru": 0.715 / 1e6, "s3_put": 0.0047 / 1000, "s3_get": 0.00037 / 1000, "athena_tb": 5.00,
     "gateway_call": 0.000005, "memory_stm_ingest_gb": 1.00, "logs_ingest_gb": 0.76, "spans_ingest_gb": 0.35,
-    "eventbridge_s3_event": None,  # 未確認（facts.md F9）。0 にしない（CI-PL-C2）
+    # S3 のイベント1件 = APN1-Event-64K-Chunks 1件。Cost Explorer の 2026-11-20 の実績（293件で 0.000293 USD）と
+    # Pricing API（2026-11-25、1.00 USD／100万件）で確認（idle_cost.md）
+    "eventbridge_s3_event": 1.00 / 1e6,
 }
-TRANSITIONS_PER_EXECUTION = 11  # 1回の実行の StateEntered（2026-11-20、実行の履歴で確認。成功した実行はすべて同じ経路）
+# 課金される状態遷移 = 状態に入った数（StateEntered）+ 2。セッションを止める経路は StateEntered 12、止めない経路は 11
+# （2026-11-25、実行の履歴で確認）。297回の実行（止める 277・止めない 20）で 277×14 + 20×13 = 4,138 となり、
+# Cost Explorer の 2026-11-20 の APN1-StateTransition（4,138）と一致した
+TRANSITIONS_STOP, TRANSITIONS_NO_STOP = 14, 13
+NO_STOP_CONDITIONS = {"P-idle-900", "P-idle-60"}
 GB = 1024 ** 3
 MB10 = 10 * 1024 * 1024
 
@@ -58,11 +64,12 @@ def pipeline_lines(cond: str, n: int, model_cost: float, rt: dict[str, dict]) ->
                  "P-idle-60": "P-nova の1枚あたりの値 × 10枚（同上）"}.get(cond, "CloudWatch（Service=AgentCore.CodeInterpreter）、条件の時間帯")
         lines += [CostLine("AgentCore Code Interpreter", "vCPU", float(ci["vcpu_hours"]), "vCPU-hour", 0.0895, src, basis),
                   CostLine("AgentCore Code Interpreter", "Memory", float(ci["gb_hours"]), "GB-hour", 0.00945, src, basis)]
+    tpe = TRANSITIONS_NO_STOP if cond in NO_STOP_CONDITIONS else TRANSITIONS_STOP
     lines += [
-        CostLine("AWS Step Functions（Standard）", "StateTransition", n * TRANSITIONS_PER_EXECUTION, "transition",
-                 P["sfn_transition"], "measured", f"実行 {n} 回 × 状態遷移 {TRANSITIONS_PER_EXECUTION}（無料枠 月4,000 は考えない）"),
+        CostLine("AWS Step Functions（Standard）", "StateTransition", n * tpe, "transition",
+                 P["sfn_transition"], "measured", f"実行 {n} 回 × 状態遷移 {tpe}（無料枠 月4,000 は考えない）"),
         CostLine("Amazon EventBridge", "S3 Object Created（opt-in data event）", n, "event", P["eventbridge_s3_event"],
-                 "measured", "画像1枚につき1件。単価は未確認"),
+                 "measured", "画像1枚につき1件（Cost Explorer の APN1-Event-64K-Chunks の単価）"),
         CostLine("Amazon S3", "PUT", n * 2, "request", P["s3_put"], "estimated", "1枚につき inbox への PUT と results への PUT"),
         CostLine("Amazon S3", "GET・HEAD", n * 4, "request", P["s3_get"], "estimated",
                  "1枚につき HeadObject（Step Functions）と GetObject 3回（画像・設定・見本）"),
@@ -131,7 +138,9 @@ def main() -> None:
     lam = boto3.client("lambda", region_name=REGION)
     fn = [f["FunctionName"] for f in lam.list_functions()["Functions"] if "AnalyticsTools" in f["FunctionName"]][0]
     cw = boto3.client("cloudwatch", region_name=REGION)
-    start, end = datetime(2026, 11, 20, 11, 0, tzinfo=JST), datetime.now(JST)
+    # 数える期間は試運転から本番・Q まで（直したあとの確認 fixcheck の 18:13 より前）。後から作られたほかの記事の
+    # Runtime・スパンが混ざらないよう、終わりを固定する（2026-11-25 に直した。deviations.md の 17）
+    start, end = datetime(2026, 11, 20, 11, 0, tzinfo=JST), datetime(2026, 11, 20, 18, 0, tzinfo=JST)
     stat = lambda m: sum(p["Sum"] for p in cw.get_metric_statistics(  # noqa: E731
         Namespace="AWS/Lambda", MetricName=m, Dimensions=[{"Name": "FunctionName", "Value": fn}],
         StartTime=start, EndTime=end, Period=86400, Statistics=["Sum"])["Datapoints"])
@@ -161,24 +170,27 @@ def main() -> None:
     # 0 のままだったため（2026-11-20）、イベントを読み、本文のバイト数 + 1件 26 バイトで数える
     logs = boto3.client("logs", region_name=REGION)
 
+    t0, t1 = int(start.timestamp() * 1000), int(end.timestamp() * 1000)
+
     def event_bytes(prefix: str) -> tuple[int, int]:
         tot = cnt = 0
         for g in [x["logGroupName"] for pg in logs.get_paginator("describe_log_groups").paginate(logGroupNamePrefix=prefix)
                   for x in pg["logGroups"]]:
-            for page in logs.get_paginator("filter_log_events").paginate(logGroupName=g):
+            for page in logs.get_paginator("filter_log_events").paginate(logGroupName=g, startTime=t0, endTime=t1):
                 for e in page["events"]:
                     tot += len(e["message"].encode("utf-8")) + 26
                     cnt += 1
         return tot, cnt
 
-    rt_b, rt_n = event_bytes("/aws/bedrock-agentcore/runtimes/vlmlab")
+    rt_b, rt_n = (sum(x) for x in zip(*(event_bytes(f"/aws/bedrock-agentcore/runtimes/{r}")
+                                        for r in ("vlmlab_inspector_", "vlmlab_analyst"))))
     ot_b, ot_n = event_bytes("VlmlabInspectionPlatform")
     sp_b, sp_n = event_bytes("aws/spans")
     for ln in [CostLine("CloudWatch Logs", "取り込み（Runtime のログ）", rt_b / GB, "GB", P["logs_ingest_gb"], "measured",
                         f"{rt_n} 件。うち約 95% は ADOT の gen_ai.user.message（送った画像が Base64 で入る）"),
                CostLine("CloudWatch Logs", "取り込み（Lambda・Step Functions）", ot_b / GB, "GB", P["logs_ingest_gb"], "measured", f"{ot_n} 件"),
                CostLine("CloudWatch（Transaction Search）", "スパンの取り込み", sp_b / GB, "GB", P["spans_ingest_gb"], "measured",
-                        f"aws/spans の {sp_n} 件（アカウント全体。この記事の分がほぼすべて）")]:
+                        f"aws/spans の {sp_n} 件（11/20 11:00〜18:00 JST。この時間帯はこの記事の分だけ）")]:
         rows.append({"condition": "共通（ログ・トレース）", **ln.to_row()})
 
     p = Path(a.out)
