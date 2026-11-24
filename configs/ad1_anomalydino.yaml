@@ -1,0 +1,14 @@
+# 12/10 の記事：手元の AnomalyDINO（CPU）で、良品1枚の見本から異常度を出す。AWS は使わない
+# 公式実装の VisA の既定（agnostic）：テスト画像だけ背景を除く、見本は8方向に回転、DINOv2 ViT-S/14、短辺448
+name: ad1_anomalydino
+split: data/splits/visa_test_200.csv
+refs: data/splits/visa_refs.csv      # 11/11 と同じ見本（ref_rank 1）
+n_refs: 1
+model_name: dinov2_vits14
+resolution: 448
+masking: true
+rotation: true
+device: cpu
+num_threads: null
+anomalydino_commit: dd35b0f1f6ff6146d196fe4efd3457a58ebcb1e0   # dammsi/AnomalyDINO（Apache-2.0）
+dinov2_commit: 7764ea0f912e53c92e82eb78a2a1631e92725fc8        # facebookresearch/dinov2（コードと重みは Apache-2.0）

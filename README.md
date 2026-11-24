@@ -26,6 +26,8 @@ bedrock-vlm-inspection-lab/
 │   ├── cost.py             単価表と費用の計算、累計費用での停止
 │   ├── report.py           集計表（CSV と Markdown）を出す
 │   ├── cascade.py          段階判定（迷った画像だけ上位モデルに回す）を記録から計算する
+│   ├── anomalydino.py      手元の AnomalyDINO で異常度を出す（AWS は使わない）
+│   ├── prefilter.py        2段構成（AnomalyDINO → Nova）を記録から計算する。書き出しは prefilter_report.py
 │   ├── cli.py              コマンドライン（vlmlab）
 │   └── mmad/               MMAD の選択式の問題（取得・プロンプト・呼び出し・採点・集計）
 ├── tests/                  単体テスト
@@ -109,6 +111,40 @@ uv run vlmlab report runs/n1_A runs/n1_B runs/n1_C --out results --tag summary_2
 ```
 
 `summary_200.csv`・`.md`（条件ごとの表）、`_by_category.csv`、`_business_metric.csv`、`_misclassified.csv` を出します。
+
+## 手元の AnomalyDINO（12/10 の記事。AWS は使わない）
+
+良品1枚の見本から、画像ごとの異常度を手元の PC で出します。公式実装（[dammsi/AnomalyDINO](https://github.com/dammsi/AnomalyDINO)、Apache-2.0）の `src/backbones.py`・`src/utils.py` を読み込み、DINOv2（Apache-2.0）の重みは torch.hub で取ります。PyTorch などは追加の依存（`anomalydino`）にしているので、ほかの記事の環境には入りません。
+
+```bash
+uv sync --extra anomalydino                                     # PyTorch（CPU 版）など。仮想環境は約1 GB になる
+git clone https://github.com/dammsi/AnomalyDINO third_party/AnomalyDINO
+git -C third_party/AnomalyDINO checkout dd35b0f1f6ff6146d196fe4efd3457a58ebcb1e0
+uv run --extra anomalydino vlmlab anomalydino configs/ad1_anomalydino.yaml --dry-run
+uv run --extra anomalydino vlmlab anomalydino configs/ad1_anomalydino.yaml --limit 8   # 試運転（runs/ad1_anomalydino__trial8/）
+uv run --extra anomalydino vlmlab anomalydino configs/ad1_anomalydino.yaml             # 本番（200枚）
+```
+
+- `--extra anomalydino` を付けずに `uv sync` すると、PyTorch などは外れます
+- 重み（約85 MB）と hub のコードは `data/torch_home/` に置きます（`--torch-home` で変えられる）
+- 結果は `runs/<name>/scores.jsonl`（1枚1行：異常度、1枚あたりの時間、パッチの数）と `meta.jsonl`（環境、見本の特徴づくりの時間、メモリ）
+- 計算の定義は [docs/contracts.md](docs/contracts.md) の CI-A1〜A5
+
+### 2段構成（AnomalyDINO で絞り、上位だけ Nova 2 Lite に回す）
+
+AnomalyDINO の異常度と、Nova 2 Lite の記録（11/11 の条件 B、`runs/n1_B`）を組み合わせて計算します。API は呼びません。
+
+```bash
+uv run --extra anomalydino vlmlab prefilter \
+  --scores 448=runs/ad1_anomalydino 672=runs/ad1_anomalydino_r672 \
+  --nova runs/n1_B --stage2 "Nova Pro=runs/n1_D" "Claude Sonnet 4.6=runs/n3_claude_refB" --out results
+```
+
+- 回す条件：異常度の上位 10・20・30・50%（品目ごと・全体）と、テスト画像の正解で決めた見逃し率 2%・5% のしきい値以上（楽観的な値）
+- 回さなかった画像は OK とする場合と、AnomalyDINO の判定（見逃し率 2%・5% のしきい値）とする場合
+- 回した画像の判定は Nova の repeat=1（費用も1回分）。3回の多数決は `maj_` の列（費用は3回分）
+- `--stage2` は参考：2段目を1枚1回の別の記録に替えた表（`prefilter_summary.md` の「参考：2段目を替えた場合」）と `fig_prefilter_alt.png` を足す。解析失敗は回さない画像と同じ扱い（CI-F9・F10）
+- `prefilter_summary.csv`・`.md`（表1）、`anomalydino_scores.csv`（画像ごと）、`anomalydino_score_summary.csv`（品目ごとの AUROC と分布）、`anomalydino_time.json`、`fig_prefilter.png` を出します。定義は CI-F1〜F8
 
 ## 記録の形（runs/<name>/calls.jsonl、1行1呼び出し）
 

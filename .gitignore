@@ -20,3 +20,7 @@ __pycache__/
 
 # MMAD（問題の JSON と画像。data/splits/mmad_1050.csv だけコミットする）
 data/mmad/
+
+# AnomalyDINO（12/10 の記事）：公式実装の clone と、DINOv2 の重みの置き場（torch.hub）
+third_party/
+data/torch_home/

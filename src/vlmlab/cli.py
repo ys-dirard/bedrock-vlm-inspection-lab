@@ -8,6 +8,8 @@
   vlmlab report RUN_DIR... --out DIR [--tag NAME]
   vlmlab subtypes RUN_DIR... --split CSV --out DIR   異常の種類ごとの再現率・誤検知率・AUROC（12/15。API は呼ばない）
   vlmlab cascade --nova RUN --claude RUN --embeddings JSONL --out DIR   段階判定（11/26 の記事。API は呼ばない）
+  vlmlab prefilter --scores NAME=RUN... --nova RUN --out DIR   2段構成を記録から計算する（12/10 の記事。API は呼ばない）
+  vlmlab anomalydino CONFIG [--limit N]  手元の AnomalyDINO で異常度を出す（12/10 の記事。AWS は使わない。uv sync --extra anomalydino）
 
   MMAD（11/19 の記事）
   vlmlab mmad prepare                  mmad.json を取得し、data/splits/mmad_1050.csv を作り、使う画像だけ取り出す
@@ -80,6 +82,23 @@ def main(argv: list[str] | None = None) -> None:
     cs.add_argument("--claude", required=True, help="2段目の Claude の実験（例 runs/n3_claude_refB）")
     cs.add_argument("--embeddings", required=True, help="埋め込みの記録（例 runs/n1_E/embeddings.jsonl）")
     cs.add_argument("--out", required=True)
+
+    ad = sub.add_parser("anomalydino", help="手元の AnomalyDINO で異常度を出す（12/10 の記事。AWS は使わない）")
+    ad.add_argument("config")
+    ad.add_argument("--limit", type=int, default=None, help="試運転の枚数（runs/<name>__trial<N>/ に出す）")
+    ad.add_argument("--dry-run", action="store_true", help="モデルを読まず、枚数と見本だけ表示する")
+    ad.add_argument("--visa-root", default="data/visa")
+    ad.add_argument("--runs-dir", default="runs")
+    ad.add_argument("--anomalydino-root", default="third_party/AnomalyDINO", help="公式実装の clone")
+    ad.add_argument("--torch-home", default="data/torch_home", help="DINOv2 の重みと hub のコードの置き場（TORCH_HOME）")
+
+    pf = sub.add_parser("prefilter", help="2段構成：AnomalyDINO で絞り、上位だけ Nova に回す（12/10 の記事。API は呼ばない）")
+    pf.add_argument("--scores", nargs="+", required=True,
+                    help="解像度の名前=AnomalyDINO の実験（先頭が主）。例 448=runs/ad1_anomalydino")
+    pf.add_argument("--nova", required=True, help="Nova の実験（例 runs/n1_B）")
+    pf.add_argument("--stage2", nargs="*", default=[],
+                    help="参考：2段目を替える。表示名=1枚1回の実験（例 \"Nova Pro=runs/n1_D\"）。主の解像度で計算する")
+    pf.add_argument("--out", required=True)
 
     m = sub.add_parser("mmad", help="MMAD の選択式の問題（11/19 の記事）")
     msub = m.add_subparsers(dest="mcmd", required=True)
@@ -167,6 +186,45 @@ def main(argv: list[str] | None = None) -> None:
         from .report import build_report
         for k, v in build_report(a.run_dirs, a.out, a.tag).items():
             print(f"{k}: {v}")
+    elif a.cmd == "prefilter":
+        from .prefilter import alt_conditions, join_stage2, load_scores, run_prefilter, time_summary
+        from .prefilter_report import NOVA_LABEL, write_outputs
+        from .report import load_run
+        from .run import load_jsonl
+        nova = load_run(a.nova)
+        results, ad_runs, times = {}, {}, {}
+        for spec in a.scores:
+            name, run_dir = spec.split("=", 1)
+            ad_runs[name] = load_scores(run_dir)
+            results[name] = run_prefilter(ad_runs[name], nova)
+            times[name] = time_summary(ad_runs[name], load_jsonl(Path(run_dir) / "meta.jsonl"))
+        alt_rows = []
+        if a.stage2:
+            df_main = results[next(iter(results))]["table"]
+            # 比べるために、主の2段目（Nova 2 Lite の repeat=1）も同じ形で並べる
+            alt_rows += alt_conditions(df_main.assign(s2_pred=df_main["nova1_pred"], s2_cost=df_main["nova1_cost"]),
+                                       NOVA_LABEL)
+            for spec in a.stage2:
+                name, run_dir = spec.split("=", 1)
+                alt_rows += alt_conditions(join_stage2(df_main, load_run(run_dir)), name)
+        for k, v in write_outputs(results, ad_runs, times, a.out, alt_rows).items():
+            print(f"{k}: {v}")
+    elif a.cmd == "anomalydino":
+        import os
+        os.environ["TORCH_HOME"] = str((ROOT / a.torch_home).resolve())
+        from .anomalydino import AdConfig, execute as ad_execute, plan as ad_plan
+        cfg = AdConfig.load(a.config)
+        if a.dry_run:
+            run_name, items, refs_by_cat = ad_plan(cfg, ROOT, a.limit)
+            print(json.dumps({
+                "run_name": run_name, "n_images": len(items),
+                "refs": {c: [r["image_id"] for r in rs] for c, rs in refs_by_cat.items()},
+                "by_group": items.groupby(["category", "label"]).size().to_dict().__repr__(),
+            }, ensure_ascii=False, indent=2))
+            return
+        out = ad_execute(cfg, Path(a.config), ROOT, Path(a.visa_root), ROOT / a.runs_dir,
+                         ROOT / a.anomalydino_root, a.limit)
+        print(f"out: {out}")
     elif a.cmd == "cascade":
         from .cascade import load_embeddings, run_cascade, write_outputs
         from .report import load_run
