@@ -1,0 +1,14 @@
+# 12/15 の記事：手元の AnomalyDINO（CPU）で、良品1枚の見本から MVTec LOCO AD の200枚の異常度を出す。AWS は使わない。plan.md の手順4
+# 設定は 12/10（ad1_anomalydino）と同じ：テスト画像だけ背景を除く、見本は8方向に回転、DINOv2 ViT-S/14、短辺448。見本は VLM と同じ ref_rank 1
+name: ac15_anomalydino
+split: data/splits/mvtec_loco_200.csv
+refs: data/splits/mvtec_loco_200_refs.csv
+n_refs: 1
+model_name: dinov2_vits14
+resolution: 448
+masking: true
+rotation: true
+device: cpu                          # この環境から GPU が見えない（2026-11-24、nvidia-smi が権限不足）。12/10 と同じ CPU
+num_threads: null
+anomalydino_commit: dd35b0f1f6ff6146d196fe4efd3457a58ebcb1e0   # dammsi/AnomalyDINO（Apache-2.0）
+dinov2_commit: 7764ea0f912e53c92e82eb78a2a1631e92725fc8        # facebookresearch/dinov2（コードと重みは Apache-2.0）

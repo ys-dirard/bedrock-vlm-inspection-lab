@@ -1,0 +1,7 @@
+image_id,ref_rank,category,label,split,path,dataset,subtype
+mvtec_loco_ad/screw_bag/train/good/224,1,screw_bag,normal,train,mvtec_loco_ad/screw_bag/train/good/224.png,mvtec_loco_ad,good
+mvtec_loco_ad/screw_bag/train/good/042,2,screw_bag,normal,train,mvtec_loco_ad/screw_bag/train/good/042.png,mvtec_loco_ad,good
+mvtec_loco_ad/screw_bag/train/good/285,3,screw_bag,normal,train,mvtec_loco_ad/screw_bag/train/good/285.png,mvtec_loco_ad,good
+mvtec_loco_ad/splicing_connectors/train/good/224,1,splicing_connectors,normal,train,mvtec_loco_ad/splicing_connectors/train/good/224.png,mvtec_loco_ad,good
+mvtec_loco_ad/splicing_connectors/train/good/042,2,splicing_connectors,normal,train,mvtec_loco_ad/splicing_connectors/train/good/042.png,mvtec_loco_ad,good
+mvtec_loco_ad/splicing_connectors/train/good/285,3,splicing_connectors,normal,train,mvtec_loco_ad/splicing_connectors/train/good/285.png,mvtec_loco_ad,good
