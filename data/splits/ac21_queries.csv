@@ -1,31 +1,31 @@
 query_id,category,defect_type,cell,n_relevant_strict,n_relevant_loose,query_text
-q01,candle,weird candle wick,左下,3,5,
-q02,candle,damaged corner of packaging,下,2,7,
-q03,cashew,small holes,中央,7,7,
-q04,cashew,middle breakage,中央,3,3,
-q05,cashew,small scratches,中央,3,5,
-q06,chewinggum,chunk of gum missing,中央,6,7,
-q07,chewinggum,scratches,中央,5,6,
-q08,chewinggum,corner missing,左下,3,8,
-q09,fryum,fryum stuck together,中央,6,6,
-q10,fryum,middle breakage,中央,4,5,
-q11,fryum,similar colour spot,中央,4,5,
-q12,macaroni1,small cracks,下,4,6,
-q13,macaroni1,similar colour spot,上,3,8,
-q14,macaroni1,small scratches,右,3,4,
-q15,macaroni2,small chip around edge,左,4,8,
-q16,macaroni2,color spot similar to the object,右下,3,9,
-q17,macaroni2,color spot similar to the object,左,2,9,
-q18,pcb1,melt,下,10,18,
-q19,pcb1,bent,下,5,5,
-q20,pcb1,melt,上,4,18,
-q21,pcb2,melt,中央,9,18,
-q22,pcb2,bent,上,3,5,
-q23,pcb2,melt,左,3,18,
-q24,pcb3,melt,中央,8,14,
-q25,pcb3,bent,左,3,8,
-q26,pcb3,melt,左,3,14,
-q27,pipe_fryum,burnt,中央,6,7,
-q28,pipe_fryum,small scratches,中央,6,6,
-q29,pipe_fryum,different colour spot,中央,5,5,
-q30,pipe_fryum,similar colour spot,中央,4,5,
+q01,candle,weird candle wick,左下,3,5,左下に芯の異常があるろうそく
+q02,candle,damaged corner of packaging,下,2,7,下に包装の角の傷みがあるろうそく
+q03,cashew,small holes,中央,7,7,中央に小さな穴があるカシューナッツ
+q04,cashew,middle breakage,中央,3,3,中央に真ん中の割れがあるカシューナッツ
+q05,cashew,small scratches,中央,3,5,中央に小さな傷があるカシューナッツ
+q06,chewinggum,chunk of gum missing,中央,6,7,中央に欠けがあるガム
+q07,chewinggum,scratches,中央,5,6,中央に傷があるガム
+q08,chewinggum,corner missing,左下,3,8,左下に角の欠けがあるガム
+q09,fryum,fryum stuck together,中央,6,6,中央にくっつきがあるスナック菓子（フライム）
+q10,fryum,middle breakage,中央,4,5,中央に真ん中の割れがあるスナック菓子（フライム）
+q11,fryum,similar colour spot,中央,4,5,中央に似た色のしみがあるスナック菓子（フライム）
+q12,macaroni1,small cracks,下,4,6,下に小さなひびがあるマカロニ
+q13,macaroni1,similar colour spot,上,3,8,上に似た色のしみがあるマカロニ
+q14,macaroni1,small scratches,右,3,4,右に小さな傷があるマカロニ
+q15,macaroni2,small chip around edge,左,4,8,左に縁の小さな欠けがあるマカロニ
+q16,macaroni2,color spot similar to the object,右下,3,9,右下に似た色のしみがあるマカロニ
+q17,macaroni2,color spot similar to the object,左,2,9,左に似た色のしみがあるマカロニ
+q18,pcb1,melt,下,10,18,下に溶けがあるプリント基板
+q19,pcb1,bent,下,5,5,下に曲がりがあるプリント基板
+q20,pcb1,melt,上,4,18,上に溶けがあるプリント基板
+q21,pcb2,melt,中央,9,18,中央に溶けがあるプリント基板
+q22,pcb2,bent,上,3,5,上に曲がりがあるプリント基板
+q23,pcb2,melt,左,3,18,左に溶けがあるプリント基板
+q24,pcb3,melt,中央,8,14,中央に溶けがあるプリント基板
+q25,pcb3,bent,左,3,8,左に曲がりがあるプリント基板
+q26,pcb3,melt,左,3,14,左に溶けがあるプリント基板
+q27,pipe_fryum,burnt,中央,6,7,中央に焦げがあるパイプ状のスナック菓子
+q28,pipe_fryum,small scratches,中央,6,6,中央に小さな傷があるパイプ状のスナック菓子
+q29,pipe_fryum,different colour spot,中央,5,5,中央に違う色のしみがあるパイプ状のスナック菓子
+q30,pipe_fryum,similar colour spot,中央,4,5,中央に似た色のしみがあるパイプ状のスナック菓子
