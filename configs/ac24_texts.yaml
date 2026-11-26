@@ -1,0 +1,8 @@
+# 12/24 の記事：方法 A の索引（ページのテキスト 84 件。平均 1,387 文字）
+name: ac24_texts
+manifest: data/whitepaper/ac24_text_manifest.csv
+model_id: amazon.nova-2-multimodal-embeddings-v1:0
+region: us-east-1            # モデルカードの表は us-east-1 のみ（2026-11-21 確認）
+purpose: GENERIC_INDEX
+dimension: 1024
+budget_usd: 0.05

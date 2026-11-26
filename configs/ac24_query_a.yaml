@@ -1,0 +1,8 @@
+# 12/24 の記事：方法 A のクエリ（テキストだけの索引を探す）
+name: ac24_query_a
+manifest: data/whitepaper/ac24_query_texts.csv
+model_id: amazon.nova-2-multimodal-embeddings-v1:0
+region: us-east-1            # モデルカードの表は us-east-1 のみ（2026-11-21 確認）
+purpose: TEXT_RETRIEVAL
+dimension: 1024
+budget_usd: 0.01

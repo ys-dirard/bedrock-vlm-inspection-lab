@@ -94,6 +94,43 @@
 | CI-K11 | post | 確信度の帯：nova_conf で [0, 0.5)、[0.5, 0.7)、[0.7, 0.9)、[0.9, 1.0] に分け、件数と nova_pred の正解率を出す。nova_pred が None の画像は件数に入れ、正解率の分母から除く。件数 0 の帯の正解率は None |
 | CI-K12 | post | 業務指標（CI-M6 の計算を使う）：画像ごとのスコアは、Nova だけ = 有効な回の D1 スコアの平均、Claude だけ = Claude の D1 スコア、段階判定 = 回して Claude が有効なら Claude の D1 スコア、それ以外は1段目のスコア（R1〜R5 は Nova のスコア、R6 は 0）。「一番よかった段階判定」は F1 が最大の条件（同じなら1,000枚あたりの費用が安いほう） |
 
+## search/（12/20・12/21・12/24 の記事：埋め込みと手元の検索）
+
+目的の整理（mino-problem-framing、2026-11-21）
+- 目的：画像・ページ画像・文を Nova Multimodal Embeddings で埋め込み、手元（numpy）のコサイン類似度で上位 k 件を探して、「正解が上位に入るか」を API を呼び直さずに何度でも数えられるようにする。費用は1件ごとに単価から記録する
+- 前提（confirmed、2026-11-21）：Nova Multimodal Embeddings は us-east-1 だけ（Geo / Global は非対応）。東京にはマルチモーダルの埋め込みは Cohere Embed v4 しかなく、このアカウントでは Marketplace の合意が NOT_AVAILABLE。S3 Vectors などのベクトルストアは作らない（数百件なら全件の内積で足りる）
+- 成功条件：計画の全件に有限・非ゼロの埋め込みがあり、費用がすべて分かっている。同じ記録から同じ順位が出る（同点は索引の並び順）
+- 拒否条件：応答の形が違う（種類・次元・切り詰め）、文が 8,192 文字を超える、費用が分からない（テキストでトークン数のヘッダーが無い）、再開のときに設定や中身が前の記録と違う、クエリと索引の次元が違う
+- 未決（書き手が決める）：S3 Vectors を記事で使うか（使うなら results/resources_plan.md）、次元（いまは 1024。11/11 の条件 E と、AWS のブログ「Manufacturing intelligence with Amazon Nova Multimodal Embeddings」に合わせた）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-S1 | pre | 依頼は SINGLE_EMBEDDING。purpose は仕様の9種類のうちの1つ、次元は 256・384・1024・3072。テキストは空でなく 8,192 文字以下で truncationMode=NONE（切らずに失敗させる）。画像は detailLevel（STANDARD_IMAGE / DOCUMENT_IMAGE）と形式（png / jpeg / gif / webp）が必須で、Base64 にしたあと 25 MB 以下。外れたら呼ぶ前に ValueError |
+| CI-S2 | post | 応答の embeddings がちょうど1つで、embeddingType が入力の種類（IMAGE / TEXT）、truncatedCharLength が無く、長さが設定の次元、値がすべて有限の数（bool は除く）、すべて 0 ではないときだけ使う（CI-E1 を文にも広げたもの） |
+| CI-S3 | post | 費用：応答が返らなければ 0。画像は1枚あたりの単価（STANDARD_IMAGE は per_image_usd、DOCUMENT_IMAGE は per_document_image_usd。形が不正でも応答が返れば1枚分）。テキストは HTTP ヘッダー `x-amzn-bedrock-input-token-count` × per_mtok_text_usd / 100万。ヘッダーが無ければ費用不明として記録し、そこで止める。使う種類の単価が null なら呼ぶ前に止める |
+| CI-S4 | post | 1件1行で embeddings.jsonl に追記する。再実行では埋め込みが取れた item_id を飛ばす（API のエラーの行は呼び直す）。累計が budget_usd を超えそうなら呼ばずに止める（CI-C4 と同じ）。試運転（--limit N）は一覧の先頭 N 行を別の名前（<name>__trialN）で回す |
+| CI-S5 | pre | 再開のとき、設定（model_id、purpose、dimension、image_long_edge）が前の記録と違えば止める。取得済みの item_id の中身（文・画像のバイト列の SHA-256）が変わっていても止める |
+| CI-S6 | post | 上位 k 件：両方を L2 正規化した内積（コサイン類似度）の大きい順。同点は索引の並びで先のもの（安定ソート）。exclude の item_id は候補から除く。候補が k 件に満たなければあるだけ返す。ゼロ・非有限のベクトル、次元の不一致、ID の重複は ValueError |
+| CI-S7 | post | 指標：hit@k = 上位 k 件に正解が1件以上あれば 1。precision@k = 上位 k 件の正解の数 / k（候補が k 件未満でも分母は k）。RR = 最初の正解の順位の逆数（無ければ 0）。でたらめに選んだときの期待値：precision = 正解の数 / 候補の数、hit@k = 1 − C(N−R, k) / C(N, k) |
+
+## search/pdfrag.py（12/24 の記事：図表の多い PDF を、テキストで探すか、ページ画像で探すか）
+
+公開版（ブランチ ac/12-24-public）の `data/splits/ac24_questions.csv` は、`answer` と `note` を空にしている。白書の第2部第1章には自由な二次利用の対象外の図表があり、答えの値と根拠の引用を公開しないため。質問・正解のページ・evidence は残している。
+
+目的の整理（mino-problem-framing、2026-11-21）
+- 目的：図表の多い日本語の公的な PDF（令和8年版 情報通信白書 第2部第1章、84 ページ、総務省、CC BY 4.0）で、方法 A（抜き出したテキストを埋め込む）と方法 B（ページ画像を DOCUMENT_IMAGE で埋め込む）の上位3ページの正解率と、そのページで Claude Haiku 4.5 が答えた回答の正解率・費用を比べる
+- 前提（confirmed、2026-11-21）：白書は「自由な二次利用の対象外となる図表リスト」と第三者の出典が表示された文章を除き CC BY 4.0（r08riyou.pdf）。この PDF の図表はベクター形式で、テキストを抜き出すと図表の数値・ラベルも（並びは崩れて）入る
+- 成功条件：書き手が作った質問すべてに、A・B の上位 k ページ・hit@k・recall@k と、回答の記録（費用つき）がある
+- 拒否条件：質問の正解のページが一覧に無い・空、evidence が figure / table / text 以外、設定やプロンプトが前の記録と違うまま再開する
+- 未決（書き手が決める）：質問と正解、回答の正誤の判定の仕方（書き手が判定するか、別のモデルに判定させるか）、回答に渡すのをページ画像にするかテキストにするか（answer_input）
+
+| ID | 種類 | 条件 |
+| --- | --- | --- |
+| CI-S13 | post | ページ：PDF の各ページを dpi 150 で PNG にし（page_id = <ファイル>_p<2桁のページ番号>）、テキストは pypdfium2 の get_text_bounded を、空白（改行・タブを含む）の連続を1つの空白にまとめて残す。テキストが空のページは A の一覧に入れない。ページの一覧（ac24_pages.csv）に文字数とテキストの SHA-256 を残す |
+| CI-S14 | pre | 質問：question_id が一意、answer_pages（「;」区切りの page_id）が1つ以上でページの一覧にある、evidence が figure / table / text。質問が空の行は飛ばす |
+| CI-S15 | post | 検索：A は質問（TEXT_RETRIEVAL）とページのテキスト、B は質問（DOCUMENT_RETRIEVAL）とページ画像（どちらも索引は GENERIC_INDEX）。hit@k（CI-S7）と recall@k = 上位 k に入った正解のページ / 正解のページの数。全体と evidence ごとの平均。A の候補に無いページは無いまま数え、候補の数を書く |
+| CI-S16 | post | 回答：検索の上位 k ページを検索の順に渡す（image はページの PNG を長辺 image_long_edge に縮めて、text は「[page_id] 本文」を空行でつなぐ）。1回1行で answers.jsonl に残し、費用は CI-C1〜C3。済んだ (question_id, method) は飛ばし、モデル・渡し方・縮小・プロンプトの SHA-256 が前の記録と違えば止める。予算は CI-C4・C6 |
+
 ## 前提（assumption）
 
 - Bedrock の usage の inputTokens には、キャッシュから読んだトークンは含まれない。キャッシュを使う記事で確かめる

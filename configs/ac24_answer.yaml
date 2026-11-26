@@ -1,0 +1,9 @@
+# 12/24 の記事：検索した上位3ページを Claude Haiku 4.5 に渡して答えさせる（A・B の両方で同じ渡し方）
+name: ac24_answer
+model_id: jp.anthropic.claude-haiku-4-5-20251001-v1:0
+region: ap-northeast-1
+prompt: prompts/ac24_answer_v1.txt
+answer_input: image          # image = ページ画像を渡す / text = ページのテキストを渡す（書き手が決める）
+image_long_edge: 1568        # Claude の画像の上限（長辺 1,568px）に合わせて縮める
+inference: {temperature: 0, maxTokens: 400}
+budget_usd: 1.00             # 60 回 × 約 0.009 USD = 約 0.54 USD の見込み（試運転の usage で見直す）

@@ -15,6 +15,11 @@ dependencies = [
 [project.scripts]
 vlmlab = "vlmlab.cli:main"
 
+[project.optional-dependencies]
+pdf = [
+    "pypdfium2>=4.30",
+]
+
 [dependency-groups]
 dev = ["pytest>=8.3"]
 

@@ -19,3 +19,6 @@ __pycache__/
 
 # MMAD（問題の JSON と画像。data/splits/mmad_1050.csv だけコミットする）
 data/mmad/
+
+# 12/24 の記事：白書の PDF とページの PNG・テキスト（pdfrag fetch / pages で作る）
+data/whitepaper/

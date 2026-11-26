@@ -1,0 +1,8 @@
+# 12/24 の記事：方法 B の索引（ページ画像 84 枚、DOCUMENT_IMAGE。84 × 0.0006 = 0.0504 USD の見込み）
+name: ac24_pages
+manifest: data/whitepaper/ac24_image_manifest.csv
+model_id: amazon.nova-2-multimodal-embeddings-v1:0
+region: us-east-1            # モデルカードの表は us-east-1 のみ（2026-11-21 確認）
+purpose: GENERIC_INDEX
+dimension: 1024
+budget_usd: 0.10

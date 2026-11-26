@@ -1,0 +1,8 @@
+# 12/24 の記事：方法 B のクエリ（DOCUMENT_IMAGE の画像だけの索引を探す）
+name: ac24_query_b
+manifest: data/whitepaper/ac24_query_texts.csv
+model_id: amazon.nova-2-multimodal-embeddings-v1:0
+region: us-east-1            # モデルカードの表は us-east-1 のみ（2026-11-21 確認）
+purpose: DOCUMENT_RETRIEVAL
+dimension: 1024
+budget_usd: 0.01
