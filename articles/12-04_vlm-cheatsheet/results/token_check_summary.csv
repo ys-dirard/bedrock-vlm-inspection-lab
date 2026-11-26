@@ -1,0 +1,37 @@
+﻿model_id,variant,width,height,input_tokens_with_image,input_tokens_text_only,image_tokens_measured,image_tokens_by_doc,diff_measured_minus_doc,doc_basis
+jp.amazon.nova-2-lite-v1:0,original,1404,1070,294,62,232,230,2,Nova 2 のユーザーガイド：1枚230トークンで課金 [AWS]
+jp.amazon.nova-2-lite-v1:0,long768,768,585,294,62,232,230,2,Nova 2 のユーザーガイド：1枚230トークンで課金 [AWS]
+jp.anthropic.claude-haiku-4-5-20251001-v1:0,original,1404,1070,1563,29,1534,1530,4,Anthropic の Vision（Standard 階層）：1404x1070 → 1249x952、⌈1249/28⌉×⌈952/28⌉ [提供元]
+jp.anthropic.claude-haiku-4-5-20251001-v1:0,long768,768,585,621,29,592,588,4,Anthropic の Vision（Standard 階層）：768x585 → 768x585、⌈768/28⌉×⌈585/28⌉ [提供元]
+qwen.qwen3-vl-235b-a22b,original,1404,1070,1480,26,1454,,,公式の文書に式なし
+qwen.qwen3-vl-235b-a22b,long768,768,585,460,26,434,,,公式の文書に式なし
+amazon.nova-lite-v1:0,original,1404,1070,1650,16,1634,,,"Nova（Version 1）のユーザーガイドは目安の表だけ（900×900 で約1,300、1400×900 で約1,800 など）[AWS]"
+amazon.nova-lite-v1:0,long768,768,585,1650,16,1634,,,"Nova（Version 1）のユーザーガイドは目安の表だけ（900×900 で約1,300、1400×900 で約1,800 など）[AWS]"
+apac.amazon.nova-pro-v1:0,original,1404,1070,1650,16,1634,,,"Nova（Version 1）のユーザーガイドは目安の表だけ（900×900 で約1,300、1400×900 で約1,800 など）[AWS]"
+apac.amazon.nova-pro-v1:0,long768,768,585,1650,16,1634,,,"Nova（Version 1）のユーザーガイドは目安の表だけ（900×900 で約1,300、1400×900 で約1,800 など）[AWS]"
+jp.anthropic.claude-sonnet-4-6,original,1404,1070,1563,29,1534,1530,4,Anthropic の Vision（Standard 階層）：1404x1070 → 1249x952、⌈1249/28⌉×⌈952/28⌉ [提供元]
+jp.anthropic.claude-sonnet-4-6,long768,768,585,621,29,592,588,4,Anthropic の Vision（Standard 階層）：768x585 → 768x585、⌈768/28⌉×⌈585/28⌉ [提供元]
+google.gemma-3-4b-it,original,1404,1070,284,25,259,256,3,Gemma 3 のモデルカード：896×896 に正規化して1枚256トークン [提供元]
+google.gemma-3-4b-it,long768,768,585,284,25,259,256,3,Gemma 3 のモデルカード：896×896 に正規化して1枚256トークン [提供元]
+google.gemma-3-12b-it,original,1404,1070,284,25,259,256,3,Gemma 3 のモデルカード：896×896 に正規化して1枚256トークン [提供元]
+google.gemma-3-12b-it,long768,768,585,284,25,259,256,3,Gemma 3 のモデルカード：896×896 に正規化して1枚256トークン [提供元]
+mistral.magistral-small-2509,original,1404,1070,2049,21,2028,,,Mistral の FAQ の表に Magistral Small はない
+mistral.magistral-small-2509,long768,768,585,630,21,609,,,Mistral の FAQ の表に Magistral Small はない
+mistral.ministral-3-3b-instruct,original,1404,1070,2049,21,2028,1916,112,Mistral の Vision の FAQ：約 (幅×高さ)/784 = 1404×1070/784（近似）[提供元]
+mistral.ministral-3-3b-instruct,long768,768,585,630,21,609,573,36,Mistral の Vision の FAQ：約 (幅×高さ)/784 = 768×585/784（近似）[提供元]
+mistral.ministral-3-8b-instruct,original,1404,1070,2049,21,2028,1916,112,Mistral の Vision の FAQ：約 (幅×高さ)/784 = 1404×1070/784（近似）[提供元]
+mistral.ministral-3-8b-instruct,long768,768,585,630,21,609,573,36,Mistral の Vision の FAQ：約 (幅×高さ)/784 = 768×585/784（近似）[提供元]
+mistral.ministral-3-14b-instruct,original,1404,1070,2049,21,2028,1916,112,Mistral の Vision の FAQ：約 (幅×高さ)/784 = 1404×1070/784（近似）[提供元]
+mistral.ministral-3-14b-instruct,long768,768,585,630,21,609,573,36,Mistral の Vision の FAQ：約 (幅×高さ)/784 = 768×585/784（近似）[提供元]
+mistral.mistral-large-3-675b-instruct,original,1404,1070,2049,21,2028,1916,112,Mistral の Vision の FAQ：約 (幅×高さ)/784 = 1404×1070/784（近似）[提供元]
+mistral.mistral-large-3-675b-instruct,long768,768,585,630,21,609,573,36,Mistral の Vision の FAQ：約 (幅×高さ)/784 = 768×585/784（近似）[提供元]
+moonshotai.kimi-k2.5,original,1404,1070,2039,45,1994,,,公式の文書に式なし
+moonshotai.kimi-k2.5,long768,768,585,638,45,593,,,公式の文書に式なし
+nvidia.nemotron-nano-12b-v2,original,1404,1070,3364,33,3331,,,公式の文書に式なし
+nvidia.nemotron-nano-12b-v2,long768,768,585,3364,33,3331,,,公式の文書に式なし
+global.moonshotai.kimi-k3,original,1404,1070,2102,103,1999,,,公式の文書に式なし
+global.moonshotai.kimi-k3,long768,768,585,699,103,596,,,公式の文書に式なし
+jp.anthropic.claude-sonnet-4-5-20250929-v1:0,(失敗),,,,,,,,エラー: ResourceNotFoundException
+google.gemma-3-27b-it,(失敗),,,,,,,,エラー: ReadTimeoutError
+global.xai.grok-4.6,(失敗),,,,,,,,エラー: AccessDeniedException
+global.xai.grok-4.7,(失敗),,,,,,,,エラー: AccessDeniedException
